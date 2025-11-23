@@ -1,0 +1,58 @@
+{
+  "name": "character-archive",
+  "version": "2.0.0",
+  "description": "Character Archive - Node.js Edition",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "predev": "node scripts/predev.js",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
+    "dev:api": "nodemon server.js",
+    "dev:ui": "cross-env TAILWIND_DISABLE_NATIVE=1 npm run dev --prefix frontend",
+    "dev:ui:clean": "cross-env TAILWIND_DISABLE_NATIVE=1 npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "prod": "concurrently \"node server.js\" \"npm run start --prefix frontend\"",
+    "sync": "node scripts/sync.js",
+    "update-metadata": "node scripts/update-metadata.js",
+    "import:ct": "node scripts/import-ct-cards.js",
+    "sync:search": "node scripts/sync-meilisearch.js",
+    "fix:flags": "node scripts/fix-feature-flags.js",
+    "vector:backfill": "node scripts/etl_cards_vector_search.js",
+    "vector:flush": "node scripts/flush-vector-indexes.js"
+  },
+  "keywords": [
+    "chub",
+    "character-cards",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "better-sqlite3": "^12.4.1",
+    "commander": "^11.1.0",
+    "compression": "^1.7.4",
+    "dotenv": "^16.3.1",
+    "ejs": "^3.1.10",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.2.1",
+    "form-data": "^4.0.0",
+    "franc": "^6.1.0",
+    "helmet": "^7.1.0",
+    "lightningcss": "^1.30.2",
+    "meilisearch": "^0.54.0",
+    "morgan": "^1.10.0",
+    "node-cache": "^5.1.2",
+    "png-chunk-text": "^1.0.0",
+    "png-chunks-encode": "^1.0.0",
+    "png-chunks-extract": "^1.0.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "kill-port": "^2.0.1",
+    "nodemon": "^3.0.2"
+  }
+}

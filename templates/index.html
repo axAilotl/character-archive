@@ -1,0 +1,2850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Character Archive</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <style>
+        :root {
+            /* Base Colors */
+            --clr-dark-a0: #000000;
+            --clr-light-a0: #ffffff;
+            /* Dark theme primary colors */
+            --clr-primary-a0: #3ab9fe;
+            --clr-primary-a10: #5fc1fe;
+            --clr-primary-a20: #79c8ff;
+            --clr-primary-a30: #90d0ff;
+            --clr-primary-a40: #a5d8ff;
+            --clr-primary-a50: #b8e0ff;
+            /* Dark theme surface colors */
+            --clr-surface-a0: #121212;
+            --clr-surface-a10: #282828;
+            --clr-surface-a20: #3f3f3f;
+            --clr-surface-a30: #575757;
+            --clr-surface-a40: #717171;
+            --clr-surface-a50: #8b8b8b;
+            /* Dark theme tonal surface colors */
+            --clr-surface-tonal-a0: #1a2026;
+            --clr-surface-tonal-a10: #2f353a;
+            --clr-surface-tonal-a20: #464b50;
+            --clr-surface-tonal-a30: #5d6267;
+            --clr-surface-tonal-a40: #767a7e;
+            --clr-surface-tonal-a50: #909397;
+            /* Light Mode Custom Variables */
+            --background: var(--clr-light-a0);
+            --text: var(--clr-dark-a0);
+            --accent: var(--clr-primary-a0);
+            --accent-hover: var(--clr-primary-a10);
+            --card-background: #f9f9f9;
+            --card-border: #e0e0e0;
+            --card-shadow: rgba(0, 0, 0, 0.1);
+            --button-bg: var(--clr-primary-a0);
+            --button-bg-hover: var(--clr-primary-a10);
+            --button-text: var(--clr-light-a0);
+            --transition-speed: 0.3s;
+        }
+
+        .redux {
+            font-size: 0.6em; /* Adjust as needed */
+            font-style: italic;
+        }
+
+        /* Dark Mode Overrides */
+        body.dark-mode {
+            --background: var(--clr-surface-a0);
+            --text: var(--clr-light-a0);
+            --accent: var(--clr-primary-a50);
+            --accent-hover: var(--clr-primary-a40);
+            --card-background: var(--clr-surface-tonal-a0);
+            --card-border: var(--clr-surface-tonal-a20);
+            --card-shadow: rgba(0, 0, 0, 0.2);
+            --button-bg: var(--clr-primary-a50);
+            --button-bg-hover: var(--clr-primary-a30);
+            --button-text: var(--clr-dark-a0);
+        }
+
+        /* Global Reset & Base Styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1rem;
+            background-color: var(--background);
+            color: var(--text);
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+            transition: color var(--transition-speed);
+        }
+
+        a:hover {
+            color: var(--accent-hover);
+        }
+
+        .header {
+            width: 100%;
+            background-color: var(--card-background);
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px var(--card-shadow);
+            border-radius: 10px;
+        }
+
+        .header-content {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: var(--text);
+        }
+
+        .card-count-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .card-count {
+			display: flex;
+            text-align: left;
+            margin: 0;
+            font-size: 1.2rem;
+            color: var(--text);
+        }
+
+        .filter-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-language,
+        #apply-language-filter {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid var(--card-border);
+            border-radius: 5px;
+            transition: border-color var(--transition-speed);
+        }
+
+        .search-language:focus,
+        #apply-language-filter:focus {
+            border-color: var(--accent);
+        }
+
+        #apply-language-filter {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            cursor: pointer;
+            transition: background-color var(--transition-speed);
+        }
+
+        #apply-language-filter:hover {
+            background-color: var(--button-bg-hover);
+        }
+
+        .header h1 a {
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .search-container input[type="text"],
+        .search-container select,
+        .search-container button {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid var(--card-border);
+            border-radius: 5px;
+            transition: border-color var(--transition-speed);
+        }
+
+        .search-container input[type="text"]:focus,
+        .search-container select:focus {
+            border-color: var(--accent);
+        }
+
+
+        .search-container button {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            cursor: pointer;
+            transition: background-color var(--transition-speed);
+        }
+
+        .search-container button:hover {
+            background-color: var(--button-bg-hover);
+        }
+
+        /* Tags & Card Count */
+        .tags-container {
+            width: 100%;
+            margin: 10px 0 0;
+            display: flex;
+            flex-wrap: wrap;
+			overflow-y: auto; 
+        }
+
+		.tag-container {
+			display: inline-block;
+		}
+
+		.tag-link {
+			display: inline-block;
+			background-color: var(--card-background);
+			border: 1px solid var(--card-border);
+			border-radius: 12px;
+			padding: 8px 12px;
+			text-decoration: none;
+			color: inherit;
+			transition: background-color var(--transition-speed), color var(--transition-speed);
+			cursor: pointer;
+		}
+
+		.tag-link:hover {
+			background-color: var(--accent);
+			color: var(--button-text);
+		}
+
+		.favorite-star-button {
+			opacity: 0;
+			transition: none !important;
+			position: absolute;
+			left: 50%;
+			transform: translateX(-50%);
+			font-size: 1.5rem !important;
+			background: transparent !important;
+			padding: 0px !important;
+			border: none;
+			z-index: 2;
+			text-shadow: -1px -1px 2px rgba(0,0,0,0.6), 1px -1px 2px rgba(0,0,0,0.6), -1px 1px 2px rgba(0,0,0,0.6), 1px 1px 2px rgba(255,255,255,0.8);
+		}
+
+		/* Show on hover OR if it’s favorited */
+		.card-container:hover .favorite-star-button,
+		.favorite-star-button.favorited {
+			opacity: 1;
+		}
+
+		.favorite-star-button:hover {
+			color: gold;
+			transition: color 1s;
+		}
+
+        .selection-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .selection-controls button {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color var(--transition-speed), opacity var(--transition-speed);
+        }
+
+        .selection-controls button:hover:enabled {
+            background-color: var(--button-bg-hover);
+        }
+
+        .selection-controls button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .selected-count {
+            font-size: 0.95rem;
+            color: var(--text);
+            min-width: 90px;
+        }
+
+        body:not(.selection-mode) .selected-count {
+            visibility: hidden;
+        }
+
+        .tag-search-tip {
+            width: 100%;
+            font-size: 0.9rem;
+            color: var(--text);
+            opacity: 0.75;
+        }
+
+        /* Cards Grid Layout */
+        .cards-container {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 30px;
+            padding: 0px;
+        }
+
+        .card-container {
+            background: var(--card-background);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px var(--card-shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            position: relative;
+        }
+
+        .card-select-checkbox {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 20px;
+            height: 20px;
+            display: none;
+            z-index: 4;
+            accent-color: var(--accent);
+        }
+
+        body.selection-mode .card-select-checkbox {
+            display: block;
+        }
+
+        .card-container.selected {
+            outline: 2px solid var(--accent);
+            box-shadow: 0 5px 20px rgba(58, 185, 254, 0.25);
+        }
+
+        .card-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+		.card-container:hover .info-tag,
+		.card-container:hover .favorite-star-button {
+			animation: fadeOut 1s ease 3s forwards;
+		}
+
+        .image-wrapper {
+            position: relative;
+            width: 200px;
+            height: 300px;
+            margin: 0 auto;
+        }
+
+		.card-downloads {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
+
+        .card-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .created-at-tag {
+            position: absolute;
+            bottom: 24px;
+            right: 2px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        .last-modified-tag {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        .card-content {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Aligns items at the top */
+            text-align: center;
+        }
+
+        .card-content h3 {
+            margin: 5px 0 10px;
+            font-size: 1.6rem;
+            cursor: pointer;
+            color: var(--text);
+        }
+
+        .card-content p {
+            margin: 8px 0;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: var(--text);
+        }
+
+		.tags-box {
+			position: relative;
+            background-color: var(--card-background);
+            border: 1px solid var(--card-border);
+			padding: 6px;
+            border-radius: 8px;
+            margin-top: 10px;
+            text-align: center;
+			max-height: none;
+			overflow: visible;
+			transition: max-height 0.3s ease;
+        }
+
+		.tags-box-header {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			cursor: pointer;
+			padding: 8px;
+			user-select: none;
+			border-radius: 4px;
+			transition: background-color 0.2s;
+		}
+
+		.tags-box-header:hover {
+			background-color: var(--card-border);
+		}
+
+		.tags-arrow {
+			font-size: 0.8em;
+			transition: transform 0.2s;
+			user-select: none;
+		}
+
+		.tags-box.expandable .tags-arrow {
+			display: inline-block;
+		}
+
+		.tags-box:not(.expandable) .tags-arrow {
+			display: none;
+		}
+
+		.tags-box.expanded .tags-arrow {
+			transform: rotate(180deg);
+		}
+
+		.tags-box.collapsible .tags-arrow {
+			transform: rotate(0deg);
+		}
+
+		.tags-box a {
+			color: var(--accent);
+			text-decoration: none;
+			cursor: pointer;
+            transition: color var(--transition-speed);
+			white-space: preserve-spaces;
+			display: inline-block;
+		    background-color: var(--card-shadow);
+		    border: 1px solid var(--card-border);
+			border-radius: 5px;
+			padding: 0px 3px;
+			margin: 1px 2px;
+		}
+
+		.tags-box a:hover {
+			text-decoration: underline;
+			color: var(--accent-hover);
+            transition: color var(--transition-speed);
+		}
+
+		.availability-indicator {
+			position: absolute;
+			bottom: 3px;
+			left: 3px;
+			width: 18px;
+			height: 18px;
+			border-radius: 50%;
+			text-align: -webkit-center;
+			line-height: 18px;
+			cursor: pointer;
+			user-select: none;
+			background: var(--card-background);
+		}
+
+		.availability-indicator:hover {
+			transform: scale(1.2);
+			opacity: 1;
+		}
+
+		.circle-indicator {
+			display: inline-block;
+			width: 14px;
+			height: 14px;
+			border-radius: 50%;
+		}
+
+		.circle-indicator.visible {
+		  background-color: #4CAF50; /* green */
+		}
+
+		.circle-indicator.shadowban {
+		  background-color: #FFA500; /* orange */
+		}
+
+		.circle-indicator.deleted {
+		  background-color: #F44336; /* red */
+		}
+
+		.circle-indicator.unknown {
+		  background-color: #ccc; /* gray/white */
+		}
+
+		/* EXPANDABLE Styling */
+		.tags-box.expandable.collapsible {
+			max-height: 7.5em;
+			overflow: hidden;
+			cursor: pointer;
+			border: 1px dashed #444;
+			border-radius: 4px;
+		}
+
+		.tags-box.expandable.collapsible:hover {
+			box-shadow: 0 0 6px rgba(200, 200, 200, 0.1);
+		}
+
+		/* FADE at bottom */
+		.tags-box.expandable.collapsible::after {
+			content: "";
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			height: 2em;
+			width: 100%;
+			background: linear-gradient(to top, var(--card-background), transparent);
+			pointer-events: none;
+		}
+
+		/* EXPANDED state */
+		.tags-box.expandable.expanded {
+			max-height: none !important;
+			overflow: visible !important;
+			cursor: default;
+		}
+
+		.toggle-tags-btn {
+			margin-top: 6px;
+			font-size: 0.8rem;
+			color: var(--accent);
+			cursor: pointer;
+			background: none;
+			border: none;
+			text-decoration: underline;
+		}
+
+        .download-btn {
+            background: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease, box-shadow 0.3s ease;
+            margin: 15px auto 0; /* centers it and adds some vertical spacing */
+        }
+
+        .download-btn:hover {
+            background: var(--button-bg-hover);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        .update-button {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color var(--transition-speed);
+            font-size: 0.9rem;
+            display: block;
+            margin: 20px auto;
+        }
+
+        .update-button:hover {
+            background-color: var(--button-bg-hover);
+        }
+
+        /* Pagination */
+        .pagination {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pagination a {
+            padding: 8px 12px;
+            border: 1px solid var(--card-border);
+            border-radius: 5px;
+            transition: background-color var(--transition-speed);
+        }
+
+        .pagination a:hover {
+            background-color: var(--accent);
+            color: var(--button-text);
+        }
+
+        .pagination .disabled {
+            pointer-events: none;
+            color: #999;
+        }
+
+        /* Lightbox Styling */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 1000;
+        }
+
+        .lightbox.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .lightbox-content {
+            position: relative;
+            width: 80%;
+            max-width: 1400px;
+            max-height: 90vh;
+            background: var(--card-background);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: row;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .lightbox-content.fullsize-mode {
+            width: auto;
+            max-width: none;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            font-size: 2rem;
+            color: red;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .lightbox-image {
+            width: 200px;
+            height: 300px;
+            margin: 20px;
+            object-fit: cover;
+            background: #000;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .lightbox-image:hover {
+            transform: scale(1.02);
+        }
+
+        .lightbox-image-fullsize {
+            max-width: 90vw;
+            max-height: 90vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            cursor: pointer;
+        }
+
+        .lightbox-description {
+            padding: 40px 20px 20px;
+            overflow-y: auto;
+            color: var(--text);
+            background: var(--card-background);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .lightbox-description h2 {
+            font-size: 1.4rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .lightbox-description p {
+            font-size: 1rem;
+            color: var(--text);
+            margin: 0 0 1rem 0;
+        }
+
+		.lightbox-tagEditor {
+			flex-direction: column;
+			max-width: 50%; 
+			max-height: 80%; 
+			padding: 20px;
+		}
+
+		.tag-pill {
+			display: inline-flex;
+			align-items: center;
+			background-color: var(--card-background);
+			border: 1px solid var(--card-border);
+			border-radius: 12px;
+			padding: 5px 10px;
+			margin: 4px;
+			font-size: 0.9rem;
+			cursor: default;
+			max-width: 100%;
+		}
+
+		.tag-text {
+			word-break: break-word;
+			white-space: preserve-spaces;
+		}
+
+		.tag-pill button {
+			margin-left: 6px;
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			font-size: 1rem;
+			color: red;
+		}
+
+		/* Alternate Greetings Section */
+		.greeting-dropdown-group {
+			border: 1px solid #3f3f3f;
+			border-radius: 10px;
+			background-color: #2a2f36;
+			margin: 8px 0 16px;
+			overflow: hidden;
+			padding: 0;
+		}
+
+		.greeting-dropdown {
+			border-top: 1px solid #444;
+			background-color: #1f262c;
+		}
+
+		.greeting-dropdown:first-child {
+			border-top: none;
+		}
+
+		.greeting-dropdown summary {
+			padding: 10px 14px;
+			background-color: #2f353a;
+			font-weight: bold;
+			color: #fff;
+			cursor: pointer;
+			user-select: none;
+			outline: none;
+		}
+
+		.greeting-dropdown p {
+			margin: 0;
+			padding: 12px 14px;
+			background-color: #1a2026;
+			color: #ddd;
+			font-size: 0.95rem;
+			line-height: 1.5;
+		}
+
+		.greeting-dropdown a {
+			text-decoration-line: underline;
+		}
+
+        /* Sidebar for Quick Actions */
+        #sidebar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .sidebar-container {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color var(--transition-speed);
+        }
+
+        .sidebar-container:hover {
+            background-color: var(--button-bg-hover);
+        }
+
+        /* Action Buttons on Cards */
+        .action-button {
+            position: absolute;
+            top: 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            border: none;
+            padding: 5px 8px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity var(--transition-speed);
+        }
+
+        body.selection-mode .action-button,
+        body.selection-mode .card-container:hover .action-button {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .card-container:hover .action-button {
+            opacity: 1;
+        }
+
+        .delete-card-button {
+            right: 10px;
+        }
+
+        .edit-tags-button {
+            left: 10px;
+        }
+
+        .copy-json-button {
+            left: 10px;
+            top: 40px;
+        }
+
+        .redownload-button {
+            right: 10px;
+            top: 40px;
+        }
+
+		.change-lang-button {
+			right: 10px;
+			top: 70px;
+		}
+
+        /* Small Chub.ai Button */
+        .chub-link-button {
+            position: absolute;
+            top: 70px;
+            left: 10px; /* Adjust position so it doesn't overlap */
+            background-color: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            border: none;
+            padding: 5px 8px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+
+        .chub-link-button:hover {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .edit-tags-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: none;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 5px;
+            border-radius: 5px;
+            z-index: 3;
+        }
+
+        .edit-tags-input {
+            padding: 5px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            margin-right: 5px;
+        }
+
+        .save-tags-button {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+		.language-tag {
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        .star-tag {
+            position: absolute;
+            top: 23px;
+            left: 2px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        .favorites-tag {
+            position: absolute;
+            top: 45px;
+            left: 2px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        .messages-tag {
+            position: absolute;
+            top: 67px;
+            left: 2px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        .chats-tag {
+            position: absolute;
+            top: 89px;
+            left: 2px;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 1; /* Ensure it stays above the image */
+        }
+
+        /* Progress Display */
+        #progress,
+        #currentCardName {
+            margin-top: 10px;
+            font-size: 1rem;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .lightbox-content {
+                flex-direction: column;
+            }
+
+            .lightbox-image {
+                width: 100%;
+                height: auto;
+            }
+        }
+
+        /* Config Form Styling */
+        #configForm {
+            padding: 10px;
+            background: var(--card-background);
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            max-height: 80vh;
+            width: 100%;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 1rem;
+            color: var(--text);
+            margin-bottom: 5px;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: #fff;
+            color: #333;
+        }
+
+        .form-group input[type="checkbox"] {
+            margin-right: 10px;
+        }
+
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 15px;
+            height: 100px;
+        }
+
+        #saveConfigButton,
+        #closeConfigButton {
+            width: 120px;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            background: var(--button-bg);
+            color: var(--button-text);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background-color var(--transition-speed);
+            margin-bottom: 10px;
+        }
+
+        #saveConfigButton:hover,
+        #closeConfigButton:hover {
+            background: var(--button-bg-hover);
+        }
+
+        #configTitle {
+            color: var(--accent); /* Set text color to blue */
+            text-align: center; /* Center the text */
+            margin-bottom: 15px; /* Space below the title */
+            font-size: 1.5rem; /* Adjust font size as needed */
+        }
+
+		.tagline {
+			position: relative;
+			transition: max-height 0.3s ease;
+		}
+
+		.toggle-desc-btn {
+			display: inline;
+			font-size: 0.8rem;
+			color: var(--accent);
+			background: none;
+			border: none;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+
+		/* Notification Banner - More attractive system messages */
+		.notification-banner {
+			position: fixed;
+			bottom: 5px;
+			padding: 5px 10px;
+			border-radius: 10px;
+			font-weight: bold;
+			color: white;
+			z-index: 9999;
+			transition: opacity 0.5s;
+			text-align: center;
+			cursor: pointer;
+		}
+
+		.notification-success {
+			background-color: #4CAF50; /* Green */
+		}
+
+		.notification-error {
+			background-color: #f44336; /* Red */
+		}
+
+		/* Random Tag, dice rolling animation */
+		.rolling {
+			animation: spin 0.3s ease-in-out;
+		}
+
+		@keyframes spin {
+			0% { transform: rotate(0deg); }
+			50% { transform: rotate(360deg); }
+			100% { transform: rotate(720deg); }
+		}
+
+		@keyframes fadeOut {
+		  to {
+			opacity: 0;
+		  }
+		}
+    </style>
+</head>
+<body class="light-mode">
+<header class="header">
+    <div class="header-content">
+	        <h1><a href="/?page=1">Local Chub <span class="redux">Redux</span></a></h1>
+	        <form action="/" method="get" class="search-container">
+	            <button type="button" onclick="showConfigLightbox()">Config</button>
+	            
+	            <!-- Free text search -->
+	            <input type="text" name="freetext" placeholder="Free text search..." 
+	                   value="{{ request.args.get('freetext', '') }}" autocomplete="off">
+	            
+	            <!-- Tag input (use text input instead of massive dropdown) -->
+	            <input type="text" name="tags" id="tag-input" placeholder='Include tags (comma-separated, use "quotes" for multi-word)' 
+	                   value="{{ request.args.get('tags', '') }}" autocomplete="off" style="min-width: 250px;">
+	            
+	            <!-- Excluded tags input -->
+	            <input type="text" name="exclude_tags" id="exclude-tag-input" placeholder='Exclude tags (comma-separated)' 
+	                   value="{{ request.args.get('exclude_tags', '') }}" autocomplete="off" style="min-width: 250px;">
+	            
+	            <!-- Hidden query field for backend -->
+	            <input type="hidden" name="query" value="">
+	            
+	            <select name="type" class="search-type">
+	                <option value="full">Full Text</option>
+                <option value="tag">Tag</option>
+                <option value="title">Title</option>
+                <option value="author">Author</option>
+            </select>
+            <select name="sort" id="sort" class="search-sort">
+                <option value="new" {{ "selected" if request.args.get('sort') == "new" else "" }}>Newest (Modified
+                    Date)
+                </option>
+                <option value="old" {{ "selected" if request.args.get('sort') == "old" else "" }}>Oldest (Modified
+                    Date)
+                </option>
+                <option value="create_new" {{ "selected" if request.args.get('sort') == "create_new" else "" }}>Newest
+                    (Creation Date)
+                </option>
+                <option value="create_old" {{ "selected" if request.args.get('sort') == "create_old" else "" }}>Oldest
+                    (Creation Date)
+                </option>
+                <option value="most_stars_desc" {{ "selected" if request.args.get('sort') == "most_stars_desc" else "" }}>
+                    Most Downloads
+                </option>
+                <option value="most_stars_asc" {{ "selected" if request.args.get('sort') == "most_stars_asc" else "" }}>
+                    Least Downloads
+                </option>
+                <option value="most_favs_desc" {{ "selected" if request.args.get('sort') == "most_favs_desc" else "" }}>
+                    Most Favorites
+                </option>
+                <option value="most_favs_asc" {{ "selected" if request.args.get('sort') == "most_favs_asc" else "" }}>
+                    Least Favorites
+                </option>
+                <option value="overall_rating_desc" {{ "selected" if request.args.get('sort') == "overall_rating_desc" else "" }}>
+                    Overall User Rating
+                </option>
+                <option value="most_msgs_desc" {{ "selected" if request.args.get('sort') == "most_msgs_desc" else "" }}>
+                    Most Messages
+                </option>
+                <option value="most_msgs_asc" {{ "selected" if request.args.get('sort') == "most_msgs_asc" else "" }}>
+                    Least Messages
+                </option>
+                <option value="most_chats_desc" {{ "selected" if request.args.get('sort') == "most_chats_desc" else "" }}>
+                    Most Chats
+                </option>
+                <option value="most_chats_asc" {{ "selected" if request.args.get('sort') == "most_chats_asc" else "" }}>
+                    Least Chats
+                </option>
+                <option value="tokens_asc" {{ "selected" if request.args.get('sort') == "tokens_asc" else "" }}>Fewest
+                    Tokens First
+                </option>
+                <option value="tokens_desc" {{ "selected" if request.args.get('sort') == "tokens_desc" else "" }}>Most
+                    Tokens First
+                </option>
+            </select>
+            <button type="submit">Search</button>
+        </form>
+    </div>
+	{% if random_tags %}
+	<div class="tags-section" style="text-align: center; margin-bottom: 1em;">
+		<button id="reroll-tags" title="Reroll Tags!" style="font-size: 16px; background: none; border: none; cursor: pointer;">
+			🎲
+		</button>
+		<div id="tags-container" class="tags-container" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5em; margin-top: 0.5em;">
+			{% for tag in random_tags %}
+				<div class="tag-container">
+					<a class="tag-link" href="?query={{ tag | urlencode }}&type=tag" title="Browse other cards tagged with {{ tag }}">
+						{{ tag }}
+					</a>
+				</div>
+			{% endfor %}
+		</div>
+	</div>
+	{% endif %}
+    <div class="card-count-container">
+        <div class="card-count">
+            {% if search_results %}
+                <h2>Search Results ({{ count }} results)</h2>
+            {% else %}
+                <h2>All Cards ({{ count }})</h2>
+            {% endif %}
+			{% if keyword_counts and keyword_counts|length > 1 %}
+			<h2 style="padding: 0px 10px;"> | </h2>
+			<div style="font-size: 1rem; margin-top: 14px;">
+				<h3>
+					{% for term, kcount in keyword_counts %}
+						{{ term }} ({{ kcount }}){% if not loop.last %}, {% endif %}
+					{% endfor %}
+				</h3>
+			</div>
+			{% endif %}
+        </div>
+        <div class="filter-container">
+			<select name="favorite" id="favorite-filter" class="search-language">
+				<option value="">All Cards</option>
+				<option value="fav" {% if request.args.get('favorite') == "fav" %}selected{% endif %}>Favorited</option>
+				<option value="not_fav" {% if request.args.get('favorite') == "not_fav" %}selected{% endif %}>Not Favorited</option>
+				<option value="shadowban" {% if request.args.get('favorite') == "shadowban" %}selected{% endif %}>Shadowbanned</option>
+                <option value="deleted" {% if request.args.get('favorite') == "deleted" %}selected{% endif %}>Deleted</option>
+            </select>
+
+            <select name="language" id="language-filter" class="search-language">
+                <option value="">All Languages</option>
+				{% for code, lang in languages.items() %}
+					<option value="{{ code }}" {% if request.args.get('language') == code %}selected{% endif %}>{{ lang }}</option>
+				{% endfor %}
+            </select>
+            <button type="button" id="apply-language-filter">Go</button>
+        </div>
+        <div class="selection-controls">
+            <button type="button" id="toggle-selection-mode">Select cards</button>
+            <button type="button" id="select-all-button">Select all</button>
+            <button type="button" id="bulk-delete-button" disabled>Delete selected</button>
+            <span class="selected-count" id="selected-count">0 selected</span>
+        </div>
+        {% if request.args.get('type', 'full')|lower == 'tag' %}
+        <div class="tag-search-tip">
+            Tip: separate tags with commas. Prefix with <code>!</code> or <code>-</code> to exclude, use leading/trailing <code>*</code> for wildcards, and wrap multi-word tags in quotes.
+        </div>
+        {% endif %}
+    </div>
+</header>
+<main class="cards-container">
+    {% if search_results %}
+        {% for card in search_results %}
+            <div class="card-container" id="card-{{ card.id }}" data-card-id="{{ card.id }}" data-visibility="{{ card.visibility }}">
+                <input type="checkbox"
+                       class="card-select-checkbox"
+                       data-card-id="{{ card.id }}"
+                       aria-label="Select card {{ card.name }}">
+                <!-- Action Buttons -->
+                <button class="action-button delete-card-button" onclick="deleteCard('{{ card.id }}', '{{ card.visibility }}')"
+                        title="Delete card">🗑️
+                </button>
+				<button class="action-button edit-tags-button"
+						onclick="showTagEditor('{{ card.id }}', '{{ card.topics | join(",") }}')"
+						title="Edit tags">✏️
+				</button>
+                <button class="action-button copy-json-button" onclick="copyJSON('{{ card.id }}', this)"
+                        title="Copy JSON">📋
+                </button>
+                <button class="action-button redownload-button" onclick="redownloadImage('{{ card.id }}')"
+                        title="Redownload Image">🔄
+				<button class="action-button change-lang-button" onclick="promptChangeLanguage('{{ card.id }}', '{{ card.language }}')"
+						title="Change Language">🌍</button>
+                </button>
+                <a href="https://chub.ai/characters/{{ card.fullPath }}" target="_blank"
+                   class="action-button chub-link-button" title="View on Chub.ai">🌐</a>
+                <!-- Action buttons and edit tags container here -->
+				<button class="action-button favorite-star-button {% if card.favorited %}favorited{% endif %}"
+					onclick="toggleFavorite('{{ card.id }}', this)" title="Toggle Favorite">
+					{% if card.favorited %}
+						⭐
+					{% else %}
+						☆
+					{% endif %}
+				</button>
+
+                <div class="image-wrapper">
+                    <img src="{{ card.imagePath }}" alt="{{ card.name }}" class="card-image" title="Click for details">
+					{% set tooltip =
+						"Fully available, live card." if card.visibility == 'visible' else
+						"Available, but shadowbanned (removed from public search results)" if card.visibility == 'shadowban' else
+						"Not publicly available. Card is deleted or private" if card.visibility == 'deleted' else
+						"Unknown availability. Check via update_db.py → Option #6"
+					%}
+					<!-- Info Tags, will hide on hover after 3s -->
+					<!-- Left Side -->
+					<div class="info-tag language-tag">{{ card.language }}</div>
+					<div class="info-tag availability-indicator"
+						 title="{{ tooltip }}"
+						 onclick="handleVisibilityClick({{ card.id }}, '{{ card.visibility }}')">
+						<span class="circle-indicator {{ card.visibility }}"></span>
+					</div>
+					<div class="info-tag star-tag">⤓ {{ card.starCount }}</div>
+                    <div class="info-tag favorites-tag">♥️ {{ card.n_favorites }}</div>
+					<div class="info-tag messages-tag">✉️ {{ card.nMessages }}</div>
+                    <div class="info-tag chats-tag">💬 {{ card.nChats }}</div>
+					<!-- Bottom Right -->
+                    <div class="info-tag created-at-tag">Created: {{ card.createdAt }}</div>
+                    <div class="info-tag last-modified-tag">Modified: {{ card.lastModified }}</div>
+                </div>
+				<!-- Download button(s) placed directly below the image -->
+				{% set sanitized_name = card.name.replace("'", "") %}
+				<div class="card-downloads">
+					<button class="download-btn" onclick="downloadImage('{{ card.imagePath }}', '{{ sanitized_name }}')">
+						Download Card
+					</button>
+					<button class="download-btn" onclick="copyToClipboard('{{ card.silly_link }}')">
+						SillyTavern Import
+					</button>
+				</div>
+                <div class="card-content">
+                    <h3 onclick="showLightbox('{{ card.imagePath }}', '{{ card.description }}', '{{ card.id }}')">
+                        {{ card.name }}
+                    </h3>
+                    <p>by <a class="author_link" href="?query={{ card.author | urlencode }}&type=author" title="Browse all cards by {{ card.author }}">
+                        {{ card.author }}
+                    </a> | {{ card.tokenCount }} tokens
+                    </p>
+					{% if card.tagline|length > 1 %}
+						{% set full_desc = card.tagline | remove_links %}
+						{% set short_desc = full_desc[:300] + ("..." if full_desc|length > 300 else "") %}
+						<p class="tagline">
+							<span class="short">{{ short_desc | markdownify }}</span>
+							<span class="full" style="display:none;">{{ full_desc | markdownify }}</span>
+							{% if full_desc|length > 300 %}
+								<br/>
+								<button class="toggle-desc-btn" onclick="toggleDescription(this)">Show more</button>
+							{% endif %}
+						</p>
+					{% endif %}
+					{% if card.topics %}
+						<div class="tags-box">
+							<div class="tags-box-header" onclick="tryExpandTags(event, this.parentElement)">
+								<strong>Tags</strong>
+								<span class="tags-arrow">▼</span>
+							</div>
+							<div class="tags-content">
+								{% for topic in card.topics %}<a href="?query={{ topic | urlencode }}&type=tag" title="Browse other cards tagged with {{ topic }}">{{ topic }}</a>{% endfor %}
+							</div>
+							<button class="toggle-tags-btn" onclick="toggleTags(event, this)" style="display: none;">Show less</button>
+						</div>
+					{% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        {% for card in cards %}
+            <div class="card-container" id="card-{{ card.id }}" data-card-id="{{ card.id }}" data-visibility="{{ card.visibility }}">
+                <input type="checkbox"
+                       class="card-select-checkbox"
+                       data-card-id="{{ card.id }}"
+                       aria-label="Select card {{ card.name }}">
+                <!-- Action Buttons -->
+                <button class="action-button delete-card-button" onclick="deleteCard('{{ card.id }}', '{{ card.visibility }}')"
+                        title="Delete card">🗑️
+                </button>
+				<button class="action-button edit-tags-button"
+						onclick="showTagEditor('{{ card.id }}', '{{ card.topics | join(",") }}')"
+						title="Edit tags">✏️
+				</button>
+                <button class="action-button copy-json-button" onclick="copyJSON('{{ card.id }}', this)"
+                        title="Copy JSON">📋
+                </button>
+                <button class="action-button redownload-button" onclick="redownloadImage('{{ card.id }}')"
+                        title="Redownload Image">🔄
+				<button class="action-button change-lang-button" onclick="promptChangeLanguage('{{ card.id }}', '{{ card.language }}')"
+						title="Change Language">🌍</button>
+                </button>
+                <a href="https://chub.ai/characters/{{ card.fullPath }}" target="_blank"
+                   class="action-button chub-link-button" title="View on Chub.ai">🌐</a>
+                <!-- Action buttons and edit tags container here -->
+				<button class="action-button favorite-star-button {% if card.favorited %}favorited{% endif %}"
+					onclick="toggleFavorite('{{ card.id }}', this)" title="Toggle Favorite">
+					{% if card.favorited %}
+						⭐
+					{% else %}
+						☆
+					{% endif %}
+				</button>
+
+				<div class="image-wrapper">
+                    <img src="{{ card.imagePath }}" alt="{{ card.name }}" class="card-image" title="Click for details">
+					{% set tooltip =
+						"Fully available, live card." if card.visibility == 'visible' else
+						"Available, but shadowbanned (removed from public search results)" if card.visibility == 'shadowban' else
+						"Not publicly available. Card is deleted or private" if card.visibility == 'deleted' else
+						"Unknown availability. Check via update_db.py → Option #6"
+					%}
+					<!-- Info Tags, will hide on hover after 3s -->
+					<!-- Left Side -->
+					<div class="info-tag language-tag">{{ card.language }}</div>
+					<div class="info-tag availability-indicator"
+						 title="{{ tooltip }}"
+						 onclick="handleVisibilityClick({{ card.id }}, '{{ card.visibility }}')">
+						<span class="circle-indicator {{ card.visibility }}"></span>
+					</div>
+					<div class="info-tag star-tag">⤓ {{ card.starCount }}</div>
+                    <div class="info-tag favorites-tag">♥️ {{ card.n_favorites }}</div>
+					<div class="info-tag messages-tag">✉️ {{ card.nMessages }}</div>
+                    <div class="info-tag chats-tag">💬 {{ card.nChats }}</div>
+					<!-- Bottom Right -->
+                    <div class="info-tag created-at-tag">Created: {{ card.createdAt }}</div>
+                    <div class="info-tag last-modified-tag">Modified: {{ card.lastModified }}</div>
+                </div>
+				<!-- Download button placed directly below the image -->
+				{% set sanitized_name = card.name.replace("'", "") %}
+				<div class="card-downloads">
+					<button class="download-btn" onclick="downloadImage('{{ card.imagePath }}', '{{ sanitized_name }}')">
+						Download Card
+					</button>
+					<button class="download-btn" onclick="copyToClipboard('{{ card.silly_link }}')">
+						SillyTavern Import
+					</button>
+				</div>
+                <div class="card-content">
+                    <h3 onclick="showLightbox('{{ card.imagePath }}', '{{ card.description }}', '{{ card.id }}')">
+                        {{ card.name }}
+                    </h3>
+                    <p>by <a class="author_link" href="?query={{ card.author | urlencode }}&type=author" title="Browse all cards by {{ card.author }}">
+                        {{ card.author }}
+                    </a> | {{ card.tokenCount }} tokens
+                    </p>
+					{% if card.tagline|length > 1 %}
+						{% set full_desc = card.tagline | remove_links %}
+						{% set short_desc = full_desc[:300] + ("..." if full_desc|length > 300 else "") %}
+						<p class="tagline">
+							<span class="short">{{ short_desc | markdownify }}</span>
+							<span class="full" style="display:none;">{{ full_desc | markdownify }}</span>
+							{% if full_desc|length > 300 %}
+								<br/>
+								<button class="toggle-desc-btn" onclick="toggleDescription(this)">Show more</button>
+							{% endif %}
+						</p>
+					{% endif %}
+					{% if card.topics %}
+						<div class="tags-box">
+							<div class="tags-box-header" onclick="tryExpandTags(event, this.parentElement)">
+								<strong>Tags</strong>
+								<span class="tags-arrow">▼</span>
+							</div>
+							<div class="tags-content">
+								{% for topic in card.topics %}<a href="?query={{ topic | urlencode }}&type=tag" title="Browse other cards tagged with {{ topic }}">{{ topic }}</a>{% endfor %}
+							</div>
+							<button class="toggle-tags-btn" onclick="toggleTags(event, this)" style="display: none;">Show less</button>
+						</div>
+					{% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+</main>
+
+{% if count < 1 %}
+	<div style="width: 100%; text-align: center; font-size: 1.2rem; padding: 2em; color: var(--text);">
+		<div style="font-size: 4rem;">😭</div>
+		<p>No results.</p>
+			{% set search_type = request.args.get('type', 'full') %}
+			{% if keyword_counts and keyword_counts|length > 1 and search_type != 'tag' %} 
+				<p>Tip: One of your keywords above may not have been found or was too restrictive.<br>
+				Check the counts above and remove/adjust the one with the smallest count.
+				If you didn't mean to have multiple keywords, remove commas!</p>
+			{% elif search_type == 'tag' %}
+				<p>Tip: Tag search is space-sensitive — ensure tags are typed exactly as stored between your commas, with no spaces unless intended. <br/>
+				   (Yes... Some tags, for some reason, have trailing / leading spaces... don't ask me why...)</p>
+			{% elif search_type != 'full' %}
+				<p>Tip: Try doing a Full Text search if you're struggling to find results.<br/>
+				   It searches the card name, description, tagline, author and tags all at once!</p>
+			{% else %}
+				<p>Tip: Try using a smaller or more generic search term.</p>
+			{% endif %}
+	</div>
+{% endif %}
+
+{% if count > 0 %}
+<nav class="pagination">
+    {% if page > 1 %}
+        <a href="?{{ base_query }}page={{ page - 1 }}">&lt;</a>
+    {% endif %}
+    {% if count > page * 50 %}
+        <a href="?{{ base_query }}page={{ page + 1 }}">&gt;</a>
+    {% endif %}
+</nav>
+{% endif %}
+
+<div class="lightbox" id="lightbox">
+    <div class="lightbox-content">
+        <button class="lightbox-close" onclick="hideLightbox()">&times;</button>
+        <img src="" alt="Card Image" class="lightbox-image" id="lightboxImage">
+        <div class="lightbox-description" id="lightboxDescription"></div>
+    </div>
+</div>
+<div id="configLightbox" class="lightbox">
+    <div class="lightbox-content">
+        <h2 id="configTitle">Edit Configuration</h2>
+        <form id="configForm"></form>
+        <div class="button-container">
+            <button id="saveConfigButton">Save</button>
+            <button id="closeConfigButton">Close</button>
+        </div>
+    </div>
+</div>
+<div id="tagEditorModal" class="lightbox">
+    <div class="lightbox-content lightbox-tagEditor">
+        <button class="lightbox-close" onclick="closeTagEditor()">✖</button>
+        <h2>Edit Tags</h2>
+        <div id="tag-editor-container" class="tags-container" style="justify-content: flex-start;"></div>
+        <input id="new-tag-input" type="text" placeholder="Type new tag and press Enter" style="margin-top: 10px; padding: 8px; width: 100%;">
+        <button class="update-button" onclick="saveTagChanges()">Save</button>
+    </div>
+</div>
+<div style="margin: 20px 0;">
+    <button class="update-button" onclick="syncCards(); scrollToBottom()">Update cards</button>
+</div>
+<div id="progress"></div>
+<div id="currentCardName"></div>
+<div id="sidebar">
+    <button onclick="toggleDarkMode()" class="sidebar-container" title="Toggle dark mode">🌓</button>
+    <button onclick="scrollToTop()" class="sidebar-container" title="Scroll to top">⬆</button>
+    <button onclick="scrollToBottom()" class="sidebar-container" title="Scroll to bottom">⬇</button>
+</div>
+
+<div id="notification-banner" class="notification-banner" style="display: none;" onclick="hideBanner()"></div>
+
+<script>
+    // Apply dark mode based on localStorage
+    const darkModePref = localStorage.getItem('darkMode');
+    if (darkModePref === 'true') {
+        document.body.classList.add('dark-mode');
+        document.body.classList.remove('light-mode');
+    }
+
+    function toggleDarkMode() {
+        const body = document.body;
+        body.classList.toggle('dark-mode');
+        body.classList.toggle('light-mode');
+        localStorage.setItem('darkMode', body.classList.contains('dark-mode'));
+    }
+
+    function redownloadImage(cardId) {
+        if (confirm('Are you sure you want to redownload this image?')) {
+            fetch(`/redownload_image/${cardId}`, {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+					if (data.success) {
+						// Reload the image without a full page refresh which is costly and annoying
+						const container = document.getElementById(`card-${cardId}`);
+						if (container) {
+							const img = container.querySelector('.card-image');
+							if (img) {
+								const src = img.src.split('?')[0]; // Strip any existing cachebuster
+								img.src = `${src}?t=${Date.now()}`; // Add a new one
+							}
+						}
+					}
+                })
+                .catch(error => {
+                    console.error('Error redownloading image:', error);
+					showBanner("Error redownloading image. Please try again later.", true);
+                });
+        }
+    }
+
+    function downloadImage(imagePath, cardName) {
+        let cardId = imagePath.split('/').pop().split('.').shift();
+		let filename = cardName.replace(/ /g, '_') + '_' + cardId + '.png';
+        fetch(imagePath)
+            .then(response => response.blob())
+            .then(blob => {
+                let newBlob = new Blob([blob], {type: 'image/png'});
+                let url = URL.createObjectURL(newBlob);
+                let link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                console.error('Error fetching the image:', error);
+            });
+    }
+
+    function escapeRegExp(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+	function highlightSearchResults() {
+		const searchQuery = "{{ request.args.get('query', '') }}".trim();
+		const searchType = "{{ request.args.get('type', 'full') }}".trim().toUpperCase();
+		if (!searchQuery || searchType !== 'FULL') return; // Only run if query + FULL search
+
+		const highlightColor = '#ffc107';
+		const tagQueries = searchQuery.split(',')
+			.map(q => q.trim())
+			.filter(q => q.length > 0);
+		if (!tagQueries.length) return;
+
+		const tagRegex = new RegExp(tagQueries.map(escapeRegExp).join('|'), 'gi');
+		const cardContainers = document.querySelectorAll('.card-container');
+
+		// FULL search selectors only
+		const selectorsToHighlight = [
+			'.card-content h3',
+			'.short',
+			'.full',
+			'.tags-box a',
+			'.author_link'
+		];
+
+		// Recursive highlight helper
+		function highlightNode(node) {
+			if (node.nodeType === Node.TEXT_NODE) {
+				const parent = node.parentNode;
+				const frag = document.createDocumentFragment();
+				let lastIndex = 0;
+				node.textContent.replace(tagRegex, (match, offset) => {
+					if (offset > lastIndex) {
+						frag.appendChild(document.createTextNode(node.textContent.slice(lastIndex, offset)));
+					}
+					const span = document.createElement('span');
+					span.style.backgroundColor = highlightColor;
+					span.style.color = '#000';
+					span.textContent = match;
+					frag.appendChild(span);
+					lastIndex = offset + match.length;
+				});
+				if (lastIndex < node.textContent.length) {
+					frag.appendChild(document.createTextNode(node.textContent.slice(lastIndex)));
+				}
+				parent.replaceChild(frag, node);
+			} else if (node.nodeType === Node.ELEMENT_NODE && node.childNodes) {
+				node.childNodes.forEach(child => highlightNode(child));
+			}
+		}
+
+		cardContainers.forEach(cardContainer => {
+			const elementsToHighlight = cardContainer.querySelectorAll(selectorsToHighlight.join(', '));
+			elementsToHighlight.forEach(element => highlightNode(element));
+		});
+	}
+
+    highlightSearchResults();
+
+    const selectedCardIds = new Set();
+    let selectionMode = false;
+    const selectionToggleBtn = document.getElementById('toggle-selection-mode');
+    const selectAllButton = document.getElementById('select-all-button');
+    const bulkDeleteButton = document.getElementById('bulk-delete-button');
+    const selectedCountLabel = document.getElementById('selected-count');
+
+    function updateSelectedCount() {
+        if (selectedCountLabel) {
+            selectedCountLabel.textContent = `${selectedCardIds.size} selected`;
+        }
+        if (bulkDeleteButton) {
+            bulkDeleteButton.disabled = !selectionMode || selectedCardIds.size === 0;
+        }
+        if (selectAllButton) {
+            const totalCards = document.querySelectorAll('.card-select-checkbox').length;
+            selectAllButton.disabled = totalCards === 0;
+            if (selectionMode && totalCards > 0 && selectedCardIds.size === totalCards) {
+                selectAllButton.textContent = 'Clear selection';
+            } else {
+                selectAllButton.textContent = 'Select all';
+            }
+        }
+    }
+
+    function removeCardFromSelection(cardId) {
+        const id = String(cardId);
+        selectedCardIds.delete(id);
+        const checkbox = document.querySelector(`.card-select-checkbox[data-card-id="${id}"]`);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        const container = document.getElementById(`card-${id}`);
+        if (container) {
+            container.classList.remove('selected');
+        }
+    }
+
+    function setSelectionMode(enabled) {
+        selectionMode = enabled;
+        document.body.classList.toggle('selection-mode', selectionMode);
+        if (!selectionMode) {
+            selectedCardIds.clear();
+            document.querySelectorAll('.card-select-checkbox').forEach(cb => {
+                cb.checked = false;
+                const container = cb.closest('.card-container');
+                if (container) {
+                    container.classList.remove('selected');
+                }
+            });
+        }
+        if (selectionToggleBtn) {
+            selectionToggleBtn.textContent = selectionMode ? 'Cancel selection' : 'Select cards';
+        }
+        updateSelectedCount();
+    }
+
+    if (selectionToggleBtn) {
+        selectionToggleBtn.addEventListener('click', () => {
+            setSelectionMode(!selectionMode);
+        });
+    }
+
+    function selectAllCards() {
+        if (!selectionMode) {
+            setSelectionMode(true);
+        }
+
+        const checkboxes = document.querySelectorAll('.card-select-checkbox');
+        let changed = false;
+        checkboxes.forEach(cb => {
+            const cardId = cb.dataset.cardId;
+            if (!selectedCardIds.has(cardId)) {
+                selectedCardIds.add(cardId);
+                cb.checked = true;
+                const container = cb.closest('.card-container');
+                if (container) {
+                    container.classList.add('selected');
+                }
+                changed = true;
+            }
+        });
+
+        if (checkboxes.length === 0) {
+            setSelectionMode(false);
+            return;
+        }
+
+        if (!changed && selectionMode) {
+            // Already all selected; fall back to clearing
+            setSelectionMode(false);
+            return;
+        }
+
+        updateSelectedCount();
+    }
+
+    if (selectAllButton) {
+        selectAllButton.addEventListener('click', () => {
+            const totalCards = document.querySelectorAll('.card-select-checkbox').length;
+            if (!totalCards) {
+                return;
+            }
+            if (!selectionMode || selectedCardIds.size < totalCards) {
+                selectAllCards();
+            } else {
+                setSelectionMode(false);
+            }
+        });
+    }
+
+    document.addEventListener('change', event => {
+        if (!event.target.classList || !event.target.classList.contains('card-select-checkbox')) {
+            return;
+        }
+
+        if (!selectionMode) {
+            setSelectionMode(true);
+        }
+
+        const cardId = event.target.dataset.cardId;
+        const container = event.target.closest('.card-container');
+
+        if (event.target.checked) {
+            selectedCardIds.add(cardId);
+            if (container) {
+                container.classList.add('selected');
+            }
+        } else {
+            removeCardFromSelection(cardId);
+        }
+
+        updateSelectedCount();
+    });
+
+    function deleteSelectedCards() {
+        if (!selectionMode || selectedCardIds.size === 0) {
+            return;
+        }
+
+        const ids = Array.from(selectedCardIds);
+        const includesDeletedVisibility = ids.some(id => {
+            const container = document.getElementById(`card-${id}`);
+            return container && container.dataset.visibility === 'deleted';
+        });
+
+        const confirmationMessage = includesDeletedVisibility
+            ? '⚠️ Warning! One or more selected cards are no longer publicly available on Chub and may be lost forever.\nAre you sure you want to delete the selected cards?'
+            : 'Are you sure you want to delete the selected cards?';
+
+        if (!confirm(confirmationMessage)) {
+            return;
+        }
+
+        fetch('/bulk_delete_cards', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({card_ids: ids})
+        })
+            .then(response => response.json().then(data => ({ok: response.ok, data})).catch(() => ({ok: response.ok, data: null})))
+            .then(({ok, data}) => {
+                if (!ok) {
+                    const message = (data && data.message) || 'Error deleting selected cards. Please try again later.';
+                    showBanner(message, true);
+                    return;
+                }
+
+                const deletedIds = Array.isArray(data?.deleted) ? data.deleted.map(String) : [];
+                const skippedIds = Array.isArray(data?.skipped) ? data.skipped.map(item => String(item.card_id)) : [];
+                const processedIds = new Set([...deletedIds, ...skippedIds]);
+
+                processedIds.forEach(id => {
+                    removeCardFromSelection(id);
+                    const cardElement = document.getElementById(`card-${id}`);
+                    if (cardElement) {
+                        cardElement.remove();
+                    }
+                });
+
+                const hadErrors = Boolean(data?.errors && data.errors.length);
+                const baseMessage = data?.message || `Deleted ${processedIds.size} card(s).`;
+                const message = hadErrors ? `${baseMessage} Some cards could not be deleted.` : baseMessage;
+                showBanner(message, hadErrors);
+
+                if (processedIds.size > 0) {
+                    setSelectionMode(false);
+                } else {
+                    updateSelectedCount();
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting selected cards:', error);
+                showBanner('Error deleting selected cards. Please try again later.', true);
+            });
+    }
+
+    if (bulkDeleteButton) {
+        bulkDeleteButton.addEventListener('click', deleteSelectedCards);
+    }
+
+    setSelectionMode(false);
+
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImage = document.getElementById('lightboxImage');
+    const lightboxDescription = document.getElementById('lightboxDescription');
+    const lightboxContent = document.querySelector('.lightbox-content');
+    let isFullsizeImage = false;
+
+    // Toggle between card view and fullsize image
+    lightboxImage.addEventListener('click', function() {
+        if (!isFullsizeImage) {
+            // Switch to fullsize
+            this.classList.add('lightbox-image-fullsize');
+            this.classList.remove('lightbox-image');
+            lightboxDescription.style.display = 'none';
+            lightboxContent.classList.add('fullsize-mode');
+            isFullsizeImage = true;
+        } else {
+            // Switch back to card view
+            this.classList.remove('lightbox-image-fullsize');
+            this.classList.add('lightbox-image');
+            lightboxDescription.style.display = 'flex';
+            lightboxContent.classList.remove('fullsize-mode');
+            isFullsizeImage = false;
+        }
+    });
+
+    function showLightbox(imagePath, description, cardId) {
+        // Reset to card view with fixed width
+        isFullsizeImage = false;
+        lightboxImage.classList.remove('lightbox-image-fullsize');
+        lightboxImage.classList.add('lightbox-image');
+        lightboxDescription.style.display = 'flex';
+        lightboxContent.classList.remove('fullsize-mode');
+
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            lightboxDescription.innerHTML = '<img src="" alt="Card Image" class="lightbox-image" id="mobileLightboxImage">';
+            mobileLightboxImage = document.getElementById('mobileLightboxImage');
+            mobileLightboxImage.src = imagePath;
+            lightboxImage.style.display = 'none';
+        } else {
+            lightboxDescription.innerHTML = '';
+            lightboxImage.src = imagePath;
+            lightboxImage.style.display = 'block';
+        }
+        fetch(`/get_png_info/${cardId}`)
+            .then(response => response.json())
+            .then(data => {
+                // Helper function to strip CSS and potentially harmful HTML from text
+                function stripCSS(text) {
+                    if (!text) return '';
+                    // Remove <style> tags and their contents
+                    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+                    // Remove inline style attributes
+                    text = text.replace(/\s*style\s*=\s*["'][^"']*["']/gi, '');
+                    // Remove <link> tags (for external stylesheets)
+                    text = text.replace(/<link[^>]*>/gi, '');
+                    // Remove <script> tags for safety
+                    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+                    return text;
+                }
+
+                // Helper function to render images from URLs
+                function renderImages(text) {
+                    if (!text) return text;
+                    // Match markdown image syntax: ![alt](url)
+                    text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+                        return `<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; display: block; margin: 10px 0;" onerror="this.style.display='none'">`;
+                    });
+                    // Match plain image URLs
+                    text = text.replace(/(https?:\/\/[^\s<]+\.(?:jpg|jpeg|png|gif|webp))/gi, (match, url) => {
+                        return `<img src="${url}" alt="Image" style="max-width: 100%; height: auto; display: block; margin: 10px 0;" onerror="this.style.display='none'">`;
+                    });
+                    return text;
+                }
+
+                for (const [key, value] of Object.entries(data.data)) {
+                    // Skip creator_notes entirely - don't expose them
+                    if (key === 'creator_notes') {
+                        continue;
+                    }
+
+                    // Skip empty or 'none' values
+                    if (!value || value === 'none' || (Array.isArray(value) && value.length === 0)) {
+                        continue;
+                    }
+
+                    const formattedKey = key.replace(/_/g, ' ')
+                        .toLowerCase()
+                        .split(' ')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+
+                    // Tagline should always be visible (not collapsible)
+                    if (key === 'Tagline' || key === 'tagline') {
+                        let content = stripCSS(String(value));
+                        content = markdownify(content);
+                        content = renderImages(content);
+
+                        lightboxDescription.innerHTML += `
+                            <div class="info-entry" style="margin: 10px 0;">
+                                <h2 style="color: var(--accent); margin-bottom: 0.5rem;">${formattedKey}:</h2>
+                                <p style="padding: 10px; background: var(--card-background); margin: 5px 0;">${content}</p>
+                            </div>
+                        `;
+                        continue;
+                    }
+
+                    // Special handling for alternate greetings
+                    if (key === 'alternate_greetings' && Array.isArray(value)) {
+                        let greetingHTML = `
+                            <details class="greeting-dropdown" style="margin: 10px 0;">
+                                <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: var(--card-background); border-radius: 5px;">
+                                    ${formattedKey} (${value.length})
+                                </summary>
+                                <div style="padding: 10px;">
+                        `;
+
+                        value.forEach((greeting, i) => {
+                            let parsed = stripCSS(greeting);
+                            parsed = markdownify(parsed);
+                            parsed = renderImages(parsed);
+
+                            greetingHTML += `
+                                <details class="greeting-dropdown" style="margin: 5px 0; margin-left: 15px;">
+                                    <summary style="cursor: pointer; padding: 8px; background: var(--card-background); border-radius: 3px;">
+                                        Greeting ${i + 1}
+                                    </summary>
+                                    <p style="padding: 10px; background: var(--card-background); margin: 5px 0;">${parsed}</p>
+                                </details>
+                            `;
+                        });
+
+                        greetingHTML += `</div></details>`;
+                        lightboxDescription.innerHTML += greetingHTML;
+                        continue;
+                    }
+
+                    // Special handling for character book (embedded lorebook)
+                    if (key === 'character_book' && typeof value === 'object' && value !== null) {
+                        const entries = value.entries || [];
+                        if (entries.length > 0) {
+                            let lorebookHTML = `
+                                <details class="greeting-dropdown" style="margin: 10px 0;">
+                                    <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: var(--card-background); border-radius: 5px;">
+                                        Embedded Lorebook (${entries.length} entries)
+                                    </summary>
+                                    <div style="padding: 10px;">
+                            `;
+
+                            entries.forEach((entry, i) => {
+                                const keys = Array.isArray(entry.keys) ? entry.keys.join(', ') : '';
+                                let content = stripCSS(entry.content || '');
+                                content = markdownify(content);
+                                content = renderImages(content);
+                                
+                                lorebookHTML += `
+                                    <details class="greeting-dropdown" style="margin: 5px 0; margin-left: 15px;">
+                                        <summary style="cursor: pointer; padding: 8px; background: var(--card-background); border-radius: 3px;">
+                                            Entry ${i + 1}: ${keys || 'Unnamed'}
+                                        </summary>
+                                        <div style="padding: 10px; background: var(--card-background); margin: 5px 0;">
+                                            ${keys ? `<p><strong>Keys:</strong> ${keys}</p>` : ''}
+                                            <p>${content}</p>
+                                        </div>
+                                    </details>
+                                `;
+                            });
+
+                            lorebookHTML += `</div></details>`;
+                            lightboxDescription.innerHTML += lorebookHTML;
+                        }
+                        continue;
+                    }
+
+                    // All other fields - collapsible with CSS stripping
+                    let content = stripCSS(String(value));
+                    content = markdownify(content);
+                    content = renderImages(content);
+
+                    lightboxDescription.innerHTML += `
+                        <details class="greeting-dropdown" style="margin: 10px 0;">
+                            <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: var(--card-background); border-radius: 5px;">
+                                ${formattedKey}
+                            </summary>
+                            <p style="padding: 10px; background: var(--card-background); margin: 5px 0;">${content}</p>
+                        </details>
+                    `;
+                }
+
+                // Fetch card metadata for ratings and comments
+                fetch(`/get_card_metadata/${cardId}`)
+                    .then(response => response.json())
+                    .then(metadata => {
+                        const ratings = JSON.parse(metadata.ratings);
+                        const ratingsMap = new Map();
+
+                        // Organize ratings by their parentId
+                        for (const [ratingId, rating] of Object.entries(ratings)) {
+                            ratingsMap.set(ratingId, {...rating, replies: []});
+                        }
+
+                        // Build the replies structure
+                        for (const [ratingId, rating] of ratingsMap) {
+                            if (rating.parentId) {
+                                const parentRating = ratingsMap.get(String(rating.parentId));
+                                if (parentRating) {
+                                    parentRating.replies.push(rating);
+                                } else {
+                                    console.warn(`Parent rating with ID ${rating.parentId} not found for rating ID ${ratingId}`);
+                                }
+                            }
+                        }
+
+                        // Function to create HTML for ratings and their replies
+                        const createRatingHTML = (rating, isReply = false, depth = 0) => {
+                            let displayContent;
+                            if (isReply) {
+                                displayContent = `Reply: ${rating.comment}`;
+                            } else {
+                                displayContent = `Rating: ${rating.rating !== null ? rating.rating : 0}`;
+                                if (rating.comment && rating.comment.trim() !== '') {
+                                    displayContent += ` - Comment: ${rating.comment}`;
+                                }
+                            }
+
+                            const replyClass = isReply ? 'reply' : '';
+                            const indentation = depth * 20; // Increase indentation for each level of depth
+                            let html = `<p class="${replyClass}" style="margin-left: ${indentation}px;">${displayContent}</p>`;
+
+                            // Recursively add replies with increased depth
+                            for (const reply of rating.replies) {
+                                html += createRatingHTML(reply, true, depth + 1);
+                            }
+
+                            return html;
+                        };
+
+                        let ratingsContent = '';
+                        // Display top-level ratings
+                        for (const [ratingId, rating] of ratingsMap) {
+                            if (!rating.parentId) {
+                                ratingsContent += createRatingHTML(rating);
+                            }
+                        }
+
+                        // Only add the ratings section if there are any ratings
+                        if (ratingsContent) {
+                            lightboxDescription.innerHTML += `
+                                <details class="greeting-dropdown" style="margin: 10px 0;">
+                                    <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: var(--card-background); border-radius: 5px;">
+                                        Ratings (${metadata.rating}/5)
+                                    </summary>
+                                    <div style="padding: 10px; background: var(--card-background);">
+                                        ${ratingsContent}
+                                    </div>
+                                </details>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching card metadata:', error);
+                    });
+
+                lightboxDescription.scrollTop = 0;
+                lightbox.classList.add('active');
+            })
+            .catch(error => {
+                console.error('Error fetching PNG info:', error);
+            });
+    }
+
+    function showConfigLightbox() {
+        const configLightbox = document.getElementById('configLightbox');
+        const configForm = document.getElementById('configForm');
+        configForm.innerHTML = '';
+
+        // Fetch current configuration from the server
+        fetch('/get_config')
+            .then(response => response.json())
+            .then(config => {
+                // Create input fields for each configuration option
+                for (const [key, value] of Object.entries(config)) {
+                    const label = document.createElement('label');
+                    label.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
+
+                    let input;
+                    if (typeof value === 'boolean') {
+                        input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.checked = value;
+                    } else if (typeof value === 'number') {
+                        input = document.createElement('input');
+                        input.type = 'number';
+                        input.value = value;
+                    } else {
+                        input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = value;
+                    }
+                    input.name = key;
+
+                    const formGroup = document.createElement('div');
+                    formGroup.className = 'form-group';
+                    formGroup.appendChild(label);
+                    formGroup.appendChild(input);
+                    configForm.appendChild(formGroup);
+                }
+
+                // Show the lightbox
+                configLightbox.classList.add('active');
+
+                // Handle save button click
+                document.getElementById('saveConfigButton').onclick = () => {
+                    const updatedConfig = {};
+                    const inputs = configForm.querySelectorAll('input');
+
+                    inputs.forEach(input => {
+                        if (input.type === 'checkbox') {
+                            updatedConfig[input.name] = input.checked;
+                        } else if (input.type === 'number') {
+                            updatedConfig[input.name] = Number(input.value);
+                        } else {
+                            updatedConfig[input.name] = input.value;
+                        }
+                    });
+                    // ---------- new validation ----------
+                    // 'use_timeline' may only be enabled when an API key is provided
+                    if (updatedConfig.use_timeline &&
+                        (!updatedConfig.apikey || updatedConfig.apikey.trim() === '')) {
+                        alert("'Use timeline' requires a valid API key. Please enter your API key first or disable the option.");
+                        return;
+                    }
+                    // --------- /new validation ----------
+
+                    // Send updated configuration to the server
+                    fetch('/set_config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updatedConfig)
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            alert(data.message);
+                            configLightbox.classList.remove('active');
+                        })
+                        .catch(error => {
+                            console.error('Error updating configuration:', error);
+                        });
+                };
+
+                document.getElementById('closeConfigButton').onclick = () => {
+                    configLightbox.classList.remove('active');
+                };
+            })
+            .catch(error => {
+                console.error('Error fetching configuration:', error);
+            });
+    }
+
+    function hideLightbox() {
+        lightbox.classList.remove('active');
+    }
+
+    lightbox.addEventListener('click', (event) => {
+        if (event.target === lightbox) {
+            hideLightbox();
+        }
+    });
+
+    document.querySelectorAll('.card-container').forEach(cardContainer => {
+        const cardImage = cardContainer.querySelector('.card-image');
+        const cardTitle = cardContainer.querySelector('.card-content h3');
+        cardImage.addEventListener('click', () => {
+            const cardDescription = cardContainer.querySelector('.card-content #description')
+                ? cardContainer.querySelector('.card-content #description').textContent
+                : '';
+            showLightbox(cardImage.src, cardDescription, cardContainer.id.split('-')[1]);
+        });
+        cardTitle.addEventListener('click', () => {
+            const cardDescription = cardContainer.querySelector('.card-content #description')
+                ? cardContainer.querySelector('.card-content #description').textContent
+                : '';
+            showLightbox(cardImage.src, cardDescription, cardContainer.id.split('-')[1]);
+        });
+    });
+
+    function updProgress(progress, currentCardName) {
+        const progressElement = document.getElementById('progress');
+        const cardNameElement = document.getElementById('currentCardName');
+        progressElement.innerText = `Syncing progress: ${progress.toFixed(2)}%`;
+        cardNameElement.innerText = `Current Card: ${currentCardName}`;
+    }
+
+    function syncCards() {
+        updProgress(0, '');
+        const eventSource = new EventSource('/sync');
+        eventSource.onmessage = function (event) {
+            const response = JSON.parse(event.data);
+            updProgress(response.progress, response.currCard);
+            if (response.progress >= 100) {
+                eventSource.close();
+                const alertMessage = response.newCards > 0
+                    ? `Syncing completed! ${response.newCards} cards have been added/updated.`
+                    : 'Syncing completed! No cards have been added/updated.';
+                alert(alertMessage);
+                window.location.reload();
+                window.scrollTo(0, 0);
+            }
+        };
+        eventSource.onerror = function () {
+			showBanner("Error syncing cards. Please try again later.", true);
+            eventSource.close();
+        };
+    }
+
+	function deleteCard(cardId, visibility) {
+		const isDeleted = visibility === 'deleted';
+		const confirmationMessage = isDeleted
+			? '⚠️ Warning! This card is no longer publicly available on Chub, it may be lost forever...\nAre you sure you want to delete this card?'
+			: 'Are you sure you want to delete this card?';
+        if (!confirm(confirmationMessage)) {
+            return;
+        }
+
+        fetch(`/delete_card/${cardId}`, {method: 'DELETE'})
+            .then(response => response.json().then(data => ({ok: response.ok, data})).catch(() => ({ok: response.ok, data: null})))
+            .then(({ok, data}) => {
+                if (!ok) {
+					const message = (data && data.message) || "Error deleting the card. Please try again later.";
+					showBanner(message, true);
+					return;
+				}
+
+                removeCardFromSelection(cardId);
+                const cardContainer = document.getElementById(`card-${cardId}`);
+                if (cardContainer) {
+                    cardContainer.remove();
+                }
+                updateSelectedCount();
+				const message = (data && data.message) || "Card deleted successfully";
+				showBanner(message);
+            })
+            .catch(error => {
+                console.error('Error deleting the card:', error);
+				showBanner("Error deleting the card. Please try again later.", true);
+            });
+    }
+
+    function copyJSON(cardId, button) {
+        fetch('/get_png_info/' + cardId)
+            .then(response => response.json())
+            .then(data => {
+                const cardInfoDataString = JSON.stringify(data, null, 4);
+                navigator.clipboard.writeText(cardInfoDataString)
+                    .then(() => {
+                        button.innerHTML = '✓';
+                        setTimeout(() => {
+                            button.innerHTML = '📋';
+                        }, 2000);
+                    })
+                    .catch(error => {
+                        console.error('Failed to copy JSON: ', error);
+                    });
+            });
+    }
+
+    function scrollToTop() {
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    function scrollToBottom() {
+        window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const typeParam = urlParams.get('type');
+    if (typeParam) {
+        document.querySelector('.search-type [value="' + typeParam + '"]').selected = true;
+    }
+
+    // Handle "Go" button click for language filter
+    document.getElementById('apply-language-filter').addEventListener('click', function () {
+        const languageFilter = document.getElementById('language-filter').value;
+		const favFilter = document.getElementById('favorite-filter').value;
+        const searchType = document.querySelector('.search-type').value;
+        const sortType = document.getElementById('sort').value;
+        const freetextInput = document.querySelector('input[name="freetext"]');
+        const tagInput = document.getElementById('tag-input');
+        const excludeTagInput = document.getElementById('exclude-tag-input');
+        
+        // Build query from freetext and tag inputs
+        let combinedQuery = [];
+        
+        if (freetextInput && freetextInput.value.trim()) {
+            combinedQuery.push(freetextInput.value.trim());
+        }
+        
+        if (tagInput && tagInput.value.trim()) {
+            const tags = tagInput.value.split(',').map(t => t.trim()).filter(t => t);
+            tags.forEach(tag => {
+                if (!tag.startsWith('"') && !tag.startsWith("'")) {
+                    combinedQuery.push(`"${tag}"`);
+                } else {
+                    combinedQuery.push(tag);
+                }
+            });
+        }
+        
+        if (excludeTagInput && excludeTagInput.value.trim()) {
+            const excludedTags = excludeTagInput.value.split(',').map(t => t.trim()).filter(t => t);
+            excludedTags.forEach(tag => {
+                if (!tag.startsWith('"') && !tag.startsWith("'")) {
+                    combinedQuery.push(`!"${tag}"`);
+                } else {
+                    combinedQuery.push(`!${tag}`);
+                }
+            });
+        }
+        
+        const query = combinedQuery.join(',');
+
+        let url = `/?query=${encodeURIComponent(query)}&type=${searchType}&sort=${sortType}`;
+        if (languageFilter) {
+            url += `&language=${encodeURIComponent(languageFilter)}`;
+        }
+
+		if (favFilter) {
+			url += `&favorite=${encodeURIComponent(favFilter)}`;
+		}
+
+        window.location.href = url;
+    });
+
+	function toggleFavorite(cardId, btn) {
+		fetch(`/toggle_favorite/${cardId}`, { method: 'POST' })
+			.then(response => response.json())
+			.then(data => {
+				const favorited = data.favorited ?? data.Favorited ?? 0;
+
+				if (data.success) {
+					btn.innerHTML = favorited ? '⭐' : '☆';
+
+					if (favorited) {
+						btn.classList.add('favorited');
+					} else {
+						btn.classList.remove('favorited');
+					}
+				} else {
+					alert(data.message);
+				}
+			})
+			.catch(error => {
+				console.error('Error toggling favorite:', error);
+				showBanner("Error toggling favorite status. Try again later.", true);
+			});
+	}
+
+	function toggleDescription(btn) {
+		const p = btn.closest('.tagline');
+		const shortSpan = p.querySelector('.short');
+		const fullSpan = p.querySelector('.full');
+		const expanded = fullSpan.style.display === 'inline';
+
+		if (expanded) {
+			fullSpan.style.display = 'none';
+			shortSpan.style.display = 'inline';
+			btn.textContent = 'Show more';
+
+			const cardContainer = btn.closest('.card-container');
+			if (cardContainer) {
+				cardContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+		} else {
+			fullSpan.style.display = 'inline';
+			shortSpan.style.display = 'none';
+			btn.textContent = 'Show less';
+		}
+	}
+
+	function tryExpandTags(event, container) {
+		// Don't expand if clicking on a tag link
+		if (event.target.tagName.toLowerCase() === 'a') return;
+
+		// Only expandable if marked
+		if (!container.classList.contains('expandable')) return;
+
+		// Toggle between expanded and collapsed
+		if (container.classList.contains('expanded')) {
+			// Collapse
+			container.classList.remove('expanded');
+			container.classList.add('collapsible');
+			const btn = container.querySelector('.toggle-tags-btn');
+			if (btn) btn.style.display = 'none';
+			
+			// Scroll back to card top
+			const cardContainer = container.closest('.card-container');
+			if (cardContainer) {
+				cardContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+		} else {
+			// Expand
+			container.classList.add('expanded');
+			container.classList.remove('collapsible');
+			const btn = container.querySelector('.toggle-tags-btn');
+			if (btn) btn.style.display = 'inline';
+		}
+	}
+
+	// Simplify form submission - combine inputs into query field
+	document.querySelector('.search-container').addEventListener('submit', function(e) {
+		const freetextInput = document.querySelector('input[name="freetext"]');
+		const tagInput = document.getElementById('tag-input');
+		const excludeTagInput = document.getElementById('exclude-tag-input');
+		const queryInput = document.querySelector('input[name="query"]');
+		
+		// Combine freetext, tags, and excluded tags into query field
+		let combinedQuery = [];
+		
+		if (freetextInput && freetextInput.value.trim()) {
+			combinedQuery.push(freetextInput.value.trim());
+		}
+		
+		if (tagInput && tagInput.value.trim()) {
+			// Split by comma and wrap each tag in quotes if not already quoted
+			const tags = tagInput.value.split(',').map(t => t.trim()).filter(t => t);
+			tags.forEach(tag => {
+				if (!tag.startsWith('"') && !tag.startsWith("'")) {
+					combinedQuery.push(`"${tag}"`);
+				} else {
+					combinedQuery.push(tag);
+				}
+			});
+		}
+		
+		if (excludeTagInput && excludeTagInput.value.trim()) {
+			// Split by comma and add ! prefix to each excluded tag
+			const excludedTags = excludeTagInput.value.split(',').map(t => t.trim()).filter(t => t);
+			excludedTags.forEach(tag => {
+				if (!tag.startsWith('"') && !tag.startsWith("'")) {
+					combinedQuery.push(`!"${tag}"`);
+				} else {
+					combinedQuery.push(`!${tag}`);
+				}
+			});
+		}
+		
+		// Set the combined query
+		if (queryInput) {
+			queryInput.value = combinedQuery.join(',');
+		}
+		
+		// Disable the individual inputs so they don't get submitted
+		if (freetextInput) freetextInput.disabled = true;
+		if (tagInput) tagInput.disabled = true;
+		if (excludeTagInput) excludeTagInput.disabled = true;
+	});
+
+	function toggleTags(event, btn) {
+		event.stopPropagation(); // Prevent triggering container click
+		const box = btn.closest('.tags-box');
+
+		box.classList.remove('expanded');
+		box.classList.add('collapsible');
+		btn.style.display = 'none';
+
+		const cardContainer = btn.closest('.card-container');
+		if (cardContainer) {
+			cardContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	}
+
+	function setupTagOverflowDetection() {
+		const tagBoxes = document.querySelectorAll('.tags-box');
+		tagBoxes.forEach(box => {
+			const scrollHeight = box.scrollHeight;
+			const clientHeight = box.clientHeight;
+
+			// Temporarily force max-height to detect overflow
+			box.style.maxHeight = '7.5em';
+			box.style.overflow = 'hidden';
+
+			requestAnimationFrame(() => {
+				const isOverflowing = box.scrollHeight > box.clientHeight;
+				
+				if (isOverflowing) {
+					box.classList.add('expandable');
+					box.classList.add('collapsible');
+					const btn = box.querySelector('.toggle-tags-btn');
+					if (btn) btn.style.display = 'inline';
+				} else {
+					box.style.maxHeight = '';
+					box.style.overflow = '';
+				}
+			});
+		});
+	}
+
+	document.addEventListener('DOMContentLoaded', setupTagOverflowDetection);
+
+	function markdownify(text) {
+		if (!text) return '';
+
+		// Allow HTML in cards themselves, as some really cool stuff can happen.
+		// Trim whitespace and normalize *** + newlines
+		text = text.trim();
+		text = text.replace(/\*{3,}\s*\n\s*/g, '***'); // leading ***
+		text = text.replace(/\n\s*\*{3,}/g, '***');     // trailing ***
+
+		// Bold + italic
+		text = text.replace(/\*\*\*(.+?)\*\*\*/gs, '<strong><em>$1</em></strong>');
+		// Bold
+		text = text.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>');
+		// Italic (not inside other asterisks)
+		text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '<em>$1</em>');
+		// Line breaks
+		text = text.replace(/(?:\r\n|\r|\n)/g, '<br/>');
+
+		return text;
+	}
+
+	document.getElementById('reroll-tags').addEventListener('click', function () {
+		const dice = this;
+		dice.classList.add("rolling");
+
+		setTimeout(() => {
+			fetch('/reroll-tags')
+				.then(response => response.json())
+				.then(tags => {
+					const container = document.getElementById('tags-container');
+					container.innerHTML = ""; // Clear existing tags
+
+					tags.forEach(tag => {
+						const div = document.createElement("div");
+						div.className = "tag-container";
+
+						const a = document.createElement("a");
+						a.className = "tag-link";
+						a.href = `?query=${encodeURIComponent(tag)}&type=tag`;
+						a.title = `Browse other cards tagged with ${tag}`;
+						a.textContent = tag;
+
+						div.appendChild(a);
+						container.appendChild(div);
+					});
+
+					dice.classList.remove("rolling");
+				});
+		}, 300);
+	});
+
+	const LANGUAGE_MAPPING = {{ language_mapping | tojson }}
+
+	function promptChangeLanguage(cardId, currentLang) {
+		const codes = Object.keys(LANGUAGE_MAPPING);
+		const names = Object.values(LANGUAGE_MAPPING);
+
+		const input = prompt("Enter new language (code or name):", currentLang);
+		if (!input) return;
+
+		const inputLower = input.trim().toLowerCase();
+
+		// Try to match code or full name exactly
+		let finalCode = codes.find(code => code.toLowerCase() === inputLower);
+
+		if (!finalCode) {
+			const nameIndex = names.findIndex(name => name.toLowerCase() === inputLower);
+			if (nameIndex !== -1) {
+				finalCode = codes[nameIndex];
+			}
+		}
+
+		// If we still don't have a match, reject
+		if (!finalCode) {
+			alert("Invalid language. Please enter a valid language code or name.");
+			return;
+		}
+
+		const displayName = LANGUAGE_MAPPING[finalCode];
+
+		if (!confirm(`Set language to '${displayName}'?`)) return;
+
+		fetch(`/cards/${cardId}/set-language`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ language: finalCode })
+		})
+		.then(res => {
+			if (!res.ok) throw new Error();
+			return res.json();
+		})
+		.then(data => {
+			// Update UI
+			document.querySelector(`#card-${cardId} .language-tag`)
+				.textContent = data.languageName || finalCode;
+			showBanner("Language updated");
+		})
+		.catch(() => {
+			showBanner("Error updating language.", true);
+		});
+	}
+
+	function handleVisibilityClick(cardId, currentStatus) {
+		if (currentStatus !== 'unknown') {
+			const confirmReset = confirm("Do you want to reset this card's availability back to Unknown?");
+			if (!confirmReset) return;
+
+			fetch(`/cards/${cardId}/reset_visibility`, {
+				method: 'POST'
+			})
+			.then(res => {
+				if (res.ok) {
+					showBanner("Availability reset. Run the 'Audit Visibility' script in the update_db.py file to update further.");
+					location.reload(); // Or update icon dynamically
+				} else {
+					showBanner("Failed to reset availability.", true);
+				}
+			})
+			.catch(() => {
+				showBanner("An error occurred while resetting availability.", true);
+			});
+		}
+	}
+
+	function copyToClipboard(text) {
+		navigator.clipboard.writeText(text)
+			.then(() => {
+				showBanner("Copied to clipboard. Copy / Paste this into SillyTavern import now.");
+			})
+			.catch(() => {
+				showBanner("Failed to copy to clipboard.", true);
+			});
+	}
+
+	let bannerTimeout = null;
+	function showBanner(message, isError = false) {
+		const banner = document.getElementById('notification-banner');
+		banner.textContent = message;
+		banner.className = 'notification-banner ' + (isError ? 'notification-error' : 'notification-success');
+		banner.style.display = 'block';
+
+		// Clear any existing timeout
+		if (bannerTimeout) {
+			clearTimeout(bannerTimeout);
+		}
+
+		// Auto-hide after 3 seconds
+		bannerTimeout = setTimeout(() => {
+			banner.style.display = 'none';
+			bannerTimeout = null;
+		}, 3000);
+	}
+
+	function hideBanner() {
+		const banner = document.getElementById('notification-banner');
+		banner.style.display = 'none';
+		if (bannerTimeout) {
+			clearTimeout(bannerTimeout);
+			bannerTimeout = null;
+		}
+	}
+
+	let currentCardId = null;
+	let originalTagString = "";
+
+	// Open the modal
+	function showTagEditor(cardId, tagString) {
+		currentCardId = cardId;
+		originalTagString = tagString;
+
+		const container = document.getElementById("tag-editor-container");
+		container.innerHTML = "";
+
+		// Split tags exactly, no trimming!
+		const tags = tagString.split(",");
+		tags.forEach(tag => {
+			const pill = document.createElement("div");
+			pill.className = "tag-pill";
+			
+			// Show spaces visually with · markers (or use &nbsp;)
+			const displayText = tag.replace(/ /g, "&nbsp;");  
+			pill.innerHTML = `<span class="tag-text" data-raw="${tag}">${displayText}</span>`;
+
+			const removeBtn = document.createElement("button");
+			removeBtn.innerHTML = "✖";
+			removeBtn.onclick = () => pill.remove();
+
+			pill.appendChild(removeBtn);
+			container.appendChild(pill);
+		});
+
+		document.getElementById("tagEditorModal").classList.add("active");
+	}
+
+	// Close modal
+	function closeTagEditor() {
+		document.getElementById("tagEditorModal").classList.remove("active");
+		currentCardId = null;
+		originalTagString = "";
+	}
+
+	// Add new tag
+	document.getElementById("new-tag-input").addEventListener("keydown", function(event) {
+		if (event.key === "Enter" || event.key === ",") {
+			event.preventDefault();
+			const val = this.value; // DO NOT trim
+			if (val !== "") {
+				const pill = document.createElement("div");
+				pill.className = "tag-pill";
+
+				const displayText = val.replace(/ /g, "&nbsp;");
+				pill.innerHTML = `<span class="tag-text" data-raw="${val}">${displayText}</span>`;
+
+				const removeBtn = document.createElement("button");
+				removeBtn.innerHTML = "✖";
+				removeBtn.onclick = () => pill.remove();
+
+				pill.appendChild(removeBtn);
+				document.getElementById("tag-editor-container").appendChild(pill);
+			}
+			this.value = "";
+		}
+	});
+
+	// Save changes
+	function saveTagChanges() {
+		const container = document.getElementById("tag-editor-container");
+		const tagsArray = Array.from(container.querySelectorAll(".tag-text"))
+			.map(span => span.getAttribute("data-raw")); // use the raw value
+
+		const tags = tagsArray.join(",");
+
+		fetch(`/edit_tags/${currentCardId}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ tags }),
+		})
+		.then(response => {
+			if (response.status === 200) {
+				showBanner("Tags updated successfully");
+				closeTagEditor();
+			} else {
+				showBanner("Error updating tags. Please try again later.", true);
+				closeTagEditor();
+			}
+		})
+		.catch(error => {
+			console.error('Error updating tags:', error);
+			showBanner("Error updating tags. Please try again later.", true);
+			closeTagEditor();
+		});
+	}
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "watch": [
+    "server.js",
+    "backend",
+    "config.js",
+    "scripts"
+  ],
+  "ignore": [
+    "static",
+    "backup",
+    "frontend",
+    "node_modules",
+    ".next"
+  ],
+  "ext": "js,mjs,json"
+}
+

@@ -1,0 +1,240 @@
+import { CardsResponse, Config, ToggleFavoriteResponse, GalleryAsset, CachedAssetsResponse, ChubFollowsResponse } from './types';
+
+const API_BASE = '';
+
+export interface TagAliasesResponse {
+  aliases: Record<string, string[]>;
+}
+
+export async function fetchCards(params: Record<string, string | number | undefined>, signal?: AbortSignal): Promise<CardsResponse> {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.append(key, value.toString());
+    }
+  });
+  
+  const queryString = searchParams.toString();
+  const url = `${API_BASE}/api/cards${queryString ? `?${queryString}` : ''}`;
+  const res = await fetch(url, { cache: 'no-store', signal });
+  
+  if (!res.ok) {
+    throw new Error('Failed to fetch cards');
+  }
+  
+  return res.json();
+}
+
+export async function fetchCardMetadata(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/metadata`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch card metadata');
+  return res.json();
+}
+
+export async function fetchPngInfo(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/png-info`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch PNG info');
+  return res.json();
+}
+
+export async function fetchCardGallery(cardId: string): Promise<{ success: boolean; assets: GalleryAsset[]; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/gallery`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch gallery');
+  return res.json();
+}
+
+export async function toggleFavorite(cardId: string): Promise<ToggleFavoriteResponse> {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/favorite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error('Failed to toggle favorite');
+  return res.json();
+}
+
+export async function deleteCard(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete card');
+  return res.json();
+}
+
+export async function refreshCard(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/refresh`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to refresh card');
+  return res.json();
+}
+
+interface PushCardResponse {
+  success?: boolean;
+  message?: string;
+  status?: number;
+  response?: unknown;
+  error?: string;
+}
+
+export async function pushCardToSilly(cardId: string): Promise<PushCardResponse> {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  let data: PushCardResponse | null = null;
+  try {
+    data = (await res.json()) as PushCardResponse;
+  } catch {
+    // ignore JSON parse errors for non-JSON responses
+  }
+
+  if (!res.ok) {
+    const errorMessage = data?.error || data?.message || `Failed to push card (status ${res.status})`;
+    throw new Error(errorMessage);
+  }
+
+  return data || { success: true };
+}
+
+export async function pushCardToArchitect(cardId: string): Promise<PushCardResponse> {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/push-to-architect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  let data: PushCardResponse | null = null;
+  try {
+    data = (await res.json()) as PushCardResponse;
+  } catch {
+    // ignore JSON parse errors for non-JSON responses
+  }
+
+  if (!res.ok) {
+    const errorMessage = data?.error || data?.message || `Failed to push card to Character Architect (status ${res.status})`;
+    throw new Error(errorMessage);
+  }
+
+  return data || { success: true };
+}
+
+export async function bulkDeleteCards(cardIds: string[]) {
+  const res = await fetch(`${API_BASE}/api/cards/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card_ids: cardIds }),
+  });
+  if (!res.ok) throw new Error('Failed to bulk delete');
+  return res.json();
+}
+
+export async function fetchConfig(): Promise<Config> {
+  const res = await fetch(`${API_BASE}/api/config`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch config');
+  return res.json();
+}
+
+export async function updateConfig(config: Partial<Config>) {
+  const res = await fetch(`${API_BASE}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) throw new Error('Failed to update config');
+  return res.json();
+}
+
+export async function searchTags(query: string, limit: number = 20): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (query) params.append('q', query);
+  params.append('limit', limit.toString());
+  
+  const res = await fetch(`${API_BASE}/api/tags/search?${params.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to search tags');
+  return res.json();
+}
+
+export async function fetchTagAliases(): Promise<TagAliasesResponse> {
+  const res = await fetch(`${API_BASE}/api/tag-aliases`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to load tag aliases');
+  return res.json();
+}
+
+export async function rerollTags(): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/api/tags/random`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to reroll tags');
+  return res.json();
+}
+
+export async function startSync(signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/api/sync`, { signal });
+  if (!res.body) throw new Error('Failed to start sync - no response body');
+  return res.body;
+}
+
+export async function startCtSync(signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/api/sync/ct`, { signal });
+  if (!res.body) throw new Error('Failed to start CT sync - no response body');
+  return res.body;
+}
+
+export async function scanCardAssets(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/assets/scan`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to scan card assets');
+  return res.json();
+}
+
+export async function cacheCardAssets(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/assets/cache`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to cache card assets');
+  return res.json();
+}
+
+export async function getCachedAssets(cardId: string): Promise<CachedAssetsResponse> {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/assets`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to get cached assets');
+  return res.json();
+}
+
+export async function clearCachedAssets(cardId: string) {
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/assets`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to clear cached assets');
+  return res.json();
+}
+
+export async function exportCard(cardId: string, useLocal: boolean = false) {
+  const params = new URLSearchParams();
+  if (useLocal) params.append('useLocal', 'true');
+
+  const res = await fetch(`${API_BASE}/api/cards/${cardId}/export?${params.toString()}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error('Failed to export card');
+
+  // Return the blob for download
+  const blob = await res.blob();
+  const contentDisposition = res.headers.get('Content-Disposition');
+  const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `card-${cardId}.png`;
+
+  return { blob, filename };
+}
+
+export async function fetchChubFollows(profile?: string): Promise<ChubFollowsResponse> {
+  const params = new URLSearchParams();
+  if (profile) {
+    params.append('profile', profile);
+  }
+  const url = `${API_BASE}/api/chub/follows${params.toString() ? `?${params.toString()}` : ''}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    const message = errorBody?.error || 'Failed to fetch followed creators from Chub';
+    throw new Error(message);
+  }
+  return res.json();
+}
+
