@@ -1,5 +1,8 @@
 import { appConfig } from '../services/ConfigState.js';
 import { sillyTavernService } from '../services/SillyTavernService.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('CARD');
 import {
     getCards,
     getCardsByIdsOrdered,
@@ -104,7 +107,7 @@ async function syncFeatureFlagsFromMetadata(cardId, metadata) {
             cardId
         );
     } catch (error) {
-        console.warn(`[WARN] Failed to sync metadata flags for card ${cardId}:`, error?.message || error);
+        log.warn(`Failed to sync metadata flags for card ${cardId}`, error);
     }
 
     Object.assign(metadata, {
@@ -134,12 +137,12 @@ class CardController {
                     const metadata = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
                     spec.Tagline = metadata.tagline;
                 } catch (error) {
-                    console.warn('[WARN] Failed to attach tagline to PNG info:', error?.message || error);
+                    log.warn('Failed to attach tagline to PNG info', error);
                 }
             }
             res.json({ data: spec });
         } catch (error) {
-            console.error('[ERROR] Get PNG info error:', error);
+            log.error('Get PNG info error', error);
             res.status(500).json({ error: 'Failed to extract PNG info' });
         }
     };
@@ -158,7 +161,7 @@ class CardController {
             await syncFeatureFlagsFromMetadata(cardId, metadata);
             res.json(metadata);
         } catch (error) {
-            console.error('[ERROR] Get metadata error:', error);
+            log.error('Get metadata error', error);
             res.status(500).json({ error: 'Failed to load metadata' });
         }
     };
@@ -183,7 +186,7 @@ class CardController {
 
             res.json({ success: true, gallery: galleryResult });
         } catch (error) {
-            console.error('[ERROR] Refresh card error:', error);
+            log.error('Refresh card error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -236,7 +239,7 @@ class CardController {
                 gallery: galleryResult
             });
         } catch (error) {
-            console.error('[ERROR] Toggle favorite error:', error);
+            log.error('Toggle favorite error', error);
             res.status(500).json({ success: false, message: error.message });
         }
     };
@@ -245,85 +248,39 @@ class CardController {
         try {
             const cardId = req.params.cardId;
             const cardIdNum = parseInt(cardId);
-            
+            const database = getDatabase();
+
+            // Fetch source info BEFORE deleting so we can blacklist CT cards properly
+            const existing = database.prepare('SELECT source, sourceId FROM cards WHERE id = ?').get(cardIdNum);
+
             const { jsonPath, pngPath } = getCardFilePaths(cardId);
-            
+
             if (fs.existsSync(pngPath)) fs.unlinkSync(pngPath);
             if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
-            
+
             // Clean up cached assets (both DB and filesystem)
             try {
                 await clearCardAssets(cardIdNum);
             } catch (assetError) {
-                console.warn(`[WARN] Failed to cleanup assets for card ${cardId}:`, assetError.message);
-                // Don't fail the delete operation
+                log.warn(`Failed to cleanup assets for card ${cardId}`, assetError);
             }
-            
-            const result = deleteCard(cardIdNum);
-            
-            const blacklistPath = path.join(process.cwd(), 'blacklist.txt');
-            fs.appendFileSync(blacklistPath, `${cardId}\n`);
-            
-            // Also blacklist the source ID if possible
-            const database = getDatabase();
-            // Note: The record is deleted by deleteCard, so this fetch would fail if done after.
-            // But deleteCard was called above.
-            // Logic fix: We should fetch BEFORE deleting.
-            // However, server.js fetched 'existing' at start of handler.
-            // I'll fix this logic flow here to match server.js: fetch first.
-            
-            // Wait, server.js did:
-            // const existing = db.prepare(...).get(cardIdNum);
-            // ... delete ...
-            // if (existing...) blacklist
-            
-            // But here I am fetching AFTER deleteCard in previous iteration.
-            // Let's fix it in this overwrite.
-            
-            // Invalidate cache
-            invalidateQueryCache();
-            
-            res.json(result);
-        } catch (error) {
-            console.error('[ERROR] Delete card error:', error);
-            res.status(500).json({ error: error.message });
-        }
-    };
 
-    // Corrected deleteCard to fetch before delete
-    deleteCardWithFix = async (req, res) => {
-        try {
-            const cardId = req.params.cardId;
-            const cardIdNum = parseInt(cardId);
-            const database = getDatabase();
-            const existing = database.prepare('SELECT source, sourceId FROM cards WHERE id = ?').get(cardIdNum);
-            
-            const { jsonPath, pngPath } = getCardFilePaths(cardId);
-            
-            if (fs.existsSync(pngPath)) fs.unlinkSync(pngPath);
-            if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
-            
-            try {
-                await clearCardAssets(cardIdNum);
-            } catch (assetError) {
-                console.warn(`[WARN] Failed to cleanup assets for card ${cardId}:`, assetError.message);
-            }
-            
             const result = deleteCard(cardIdNum);
-            
+
             const blacklistPath = path.join(process.cwd(), 'blacklist.txt');
             fs.appendFileSync(blacklistPath, `${cardId}\n`);
+
+            // Also blacklist the CT source ID if applicable
             if (existing?.source === 'ct' && existing.sourceId) {
-                // TODO: Import addCtBlacklistEntry from ct-blacklist.js
                 const { addCtBlacklistEntry } = await import('../utils/ct-blacklist.js');
                 addCtBlacklistEntry(existing.sourceId);
             }
 
             invalidateQueryCache();
-            
+
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Delete card error:', error);
+            log.error('Delete card error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -357,7 +314,7 @@ class CardController {
                     try {
                         await clearCardAssets(cardIdNum);
                     } catch (assetError) {
-                        console.warn(`[WARN] Failed to cleanup assets for card ${cardId}:`, assetError.message);
+                        log.warn(`Failed to cleanup assets for card ${cardId}`, assetError);
                     }
                     
                     deleteCard(cardIdNum);
@@ -377,7 +334,7 @@ class CardController {
 
             res.json({ success: true, deleted, errors });
         } catch (error) {
-            console.error('[ERROR] Bulk delete error:', error);
+            log.error('Bulk delete error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -398,7 +355,7 @@ class CardController {
             const languageName = LANGUAGE_MAPPING[language] || language;
             res.json({ languageCode: language, languageName });
         } catch (error) {
-            console.error('[ERROR] Set language error:', error);
+            log.error('Set language error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -432,7 +389,7 @@ class CardController {
 
             res.json({ message: 'Tags updated successfully', topics: topics });
         } catch (error) {
-            console.error('[ERROR] Edit tags error:', error);
+            log.error('Edit tags error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -470,7 +427,7 @@ class CardController {
                 }
             }
         } catch (error) {
-            console.error('[ERROR] Export card error:', error);
+            log.error('Export card error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -508,7 +465,7 @@ class CardController {
             });
 
             if (csrfResponse.status < 200 || csrfResponse.status >= 300 || !csrfResponse.data?.token) {
-                console.error(`[ERROR] Failed to get CSRF token from ${csrfUrl}. Status: ${csrfResponse.status}`);
+                log.error(`Failed to get CSRF token from ${csrfUrl}`, null, { status: csrfResponse.status });
                 const message = csrfResponse.data?.error || `Failed to obtain Silly Tavern CSRF token (Status: ${csrfResponse.status})`;
                 return res.status(csrfResponse.status || 502).json({ success: false, error: message, response: csrfResponse.data });
             }
@@ -606,7 +563,7 @@ class CardController {
             });
 
         } catch (error) {
-            console.error('[ERROR] Push to SillyTavern failed:', error.message);
+            log.error('Push to SillyTavern failed', error);
             res.status(500).json({ success: false, error: error.message });
         }
     };
@@ -649,7 +606,7 @@ class CardController {
                 });
             }
         } catch (error) {
-            console.error('[ERROR] Push to Architect failed:', error.message);
+            log.error('Push to Architect failed', error);
             let errorMessage = error.message;
             if (error.code === 'ECONNREFUSED') {
                 errorMessage = 'Character Architect is not running or not accessible';
@@ -722,7 +679,7 @@ class CardController {
                     try {
                         sillyLoadedSet = await sillyTavernService.fetchLoadedIds({ cookieHeader: req.header('cookie') });
                     } catch (error) {
-                        console.error('[ERROR] Failed to fetch Silly Tavern loaded cards:', error?.message || error);
+                        log.error('Failed to fetch Silly Tavern loaded cards', error);
                         if (inSillyTavern) {
                             return res.status(502).json({ error: 'Failed to fetch Silly Tavern loaded cards' });
                         }
@@ -890,7 +847,7 @@ class CardController {
                                 }, cacheKey, startTime, page);
 
                             } catch (error) {
-                                console.error('[ERROR] Vector search failure:', error?.message || error);
+                                log.error('Vector search failure', error);
                                 advancedFallbackReason = `Vector search failed. ${error?.message || ''}`.trim();
                             }
                         }
@@ -931,7 +888,7 @@ class CardController {
                                 vector: vectorResponseMeta || undefined
                             }, cacheKey, startTime, page);
                         } catch (error) {
-                            console.error('[ERROR] Advanced search failure:', error?.message || error);
+                            log.error('Advanced search failure', error);
                             advancedFallbackReason = error?.message || 'Advanced search failed. Falling back to basic search.';
                         }
                     }
@@ -985,7 +942,7 @@ class CardController {
             }, cacheKey, startTime, page);
 
         } catch (error) {
-            console.error('[ERROR] Cards API error:', error);
+            log.error('Cards API error', error);
             res.status(500).json({ error: 'Failed to load cards' });
         }
     }

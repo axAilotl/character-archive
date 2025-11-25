@@ -4,6 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveTokenCountsFromMetadata, TOKEN_COUNT_COLUMNS } from './utils/token-counts.js';
+import { logger } from './utils/logger.js';
+
+const log = logger.scoped('DB');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,16 +53,16 @@ try {
             reverseAliasMap[variant.toLowerCase()] = canonical;
         }
     }
-    console.log('[INFO] Loaded tag aliases:', Object.keys(tagAliases).length, 'groups');
+    log.info(`Loaded tag aliases: ${Object.keys(tagAliases).length} groups`);
 } catch (err) {
-    console.warn('[WARN] Failed to load tag aliases:', err.message);
+    log.warn('Failed to load tag aliases', err);
 }
 
 export function getTagAliasesSnapshot() {
     try {
         return JSON.parse(JSON.stringify(tagAliases));
     } catch (err) {
-        console.warn('[WARN] Failed to clone tag aliases:', err.message);
+        log.warn('Failed to clone tag aliases', err);
         return {};
     }
 }
@@ -95,7 +98,7 @@ function expandTagSearch(searchTag) {
     if (canonical && tagAliases[canonical]) {
         // Add all variants from the alias group
         tagAliases[canonical].forEach(variant => variants.add(variant));
-        console.log(`[TAG-ALIAS] "${searchTag}" → exact match → [${Array.from(variants).join(', ')}]`);
+        log.debug(`TAG-ALIAS: "${searchTag}" -> exact match -> [${Array.from(variants).join(', ')}]`);
         return Array.from(variants);
     }
 
@@ -127,7 +130,7 @@ function expandTagSearch(searchTag) {
     if (bestMatch && tagAliases[bestMatch]) {
         // Found a fuzzy match, expand to that group
         tagAliases[bestMatch].forEach(variant => variants.add(variant));
-        console.log(`[TAG-FUZZY] "${searchTag}" → fuzzy match (distance=${bestDistance}) → [${Array.from(variants).join(', ')}]`);
+        log.debug(`TAG-FUZZY: "${searchTag}" -> fuzzy match (distance=${bestDistance}) -> [${Array.from(variants).join(', ')}]`);
     }
 
     return Array.from(variants);
@@ -338,10 +341,10 @@ async function backfillTokenCounts(databaseConn) {
             }
         }
         if (processed > 0) {
-            console.log(`[INFO] Backfilled token counts for ${processed} card(s)`);
+            log.info(`Backfilled token counts for ${processed} card(s)`);
         }
     } catch (error) {
-        console.warn('[WARN] Failed to backfill token counts:', error?.message || error);
+        log.warn('Failed to backfill token counts', error);
     }
 }
 
@@ -360,7 +363,7 @@ function rebuildCardTagsTable(databaseConn) {
     }
 
     const tempTableName = `${CARD_TAGS_TABLE_NAME}_new`;
-    console.log('[INFO] Rebuilding card_tags table for tag search consistency (staged swap)');
+    log.info('Rebuilding card_tags table for tag search consistency (staged swap)');
 
     databaseConn.prepare(`DROP TABLE IF EXISTS ${tempTableName}`).run();
     databaseConn.prepare(`
@@ -376,7 +379,7 @@ function rebuildCardTagsTable(databaseConn) {
     const BATCH_SIZE = 500;
     const totalRows = rows.length;
 
-    console.log(`[INFO] Processing ${totalRows} cards in batches of ${BATCH_SIZE}`);
+    log.info(`Processing ${totalRows} cards in batches of ${BATCH_SIZE}`);
 
     try {
         for (let i = 0; i < totalRows; i += BATCH_SIZE) {
@@ -392,14 +395,14 @@ function rebuildCardTagsTable(databaseConn) {
 
             try {
                 transaction(batch);
-                console.log(`[INFO] Processed ${batchEnd}/${totalRows} cards (${Math.round(batchEnd/totalRows*100)}%)`);
+                log.info(`Processed ${batchEnd}/${totalRows} cards (${Math.round(batchEnd/totalRows*100)}%)`);
             } catch (error) {
-                console.error(`[ERROR] Failed to process batch ${i}-${batchEnd}:`, error);
+                log.error(`Failed to process batch ${i}-${batchEnd}`, error);
                 throw error;
             }
         }
 
-        console.log('[INFO] Swapping rebuilt card_tags snapshot into place');
+        log.info('Swapping rebuilt card_tags snapshot into place');
         const swapTransaction = databaseConn.transaction(() => {
             databaseConn.prepare(`DELETE FROM ${CARD_TAGS_TABLE_NAME}`).run();
             databaseConn.prepare(`
@@ -414,12 +417,12 @@ function rebuildCardTagsTable(databaseConn) {
             throw error;
         }
 
-        console.log('[INFO] card_tags rebuild complete');
+        log.info('card_tags rebuild complete');
     } finally {
         try {
             databaseConn.prepare(`DROP TABLE IF EXISTS ${tempTableName}`).run();
         } catch (cleanupError) {
-            console.warn('[WARN] Failed to drop temporary card_tags table:', cleanupError?.message || cleanupError);
+            log.warn('Failed to drop temporary card_tags table', cleanupError);
         }
     }
 }
@@ -445,7 +448,7 @@ function shouldRebuildCardTags(databaseConn) {
 
         return { needsRebuild: false, reason: 'counts match' };
     } catch (error) {
-        console.warn('[WARN] card_tags consistency check failed:', error?.message || error);
+        log.warn('card_tags consistency check failed', error);
         return { needsRebuild: true, reason: 'consistency check failed' };
     }
 }
@@ -648,24 +651,24 @@ export function initDatabase(options = {}) {
 
         if (!skipTokenBackfill) {
             backfillTokenCounts(db).catch(error => {
-                console.warn('[WARN] Deferred token count backfill failed:', error?.message || error);
+                log.warn('Deferred token count backfill failed', error);
             });
         }
 
         if (!skipTagRebuild) {
             const { needsRebuild, reason } = shouldRebuildCardTags(db);
             if (needsRebuild) {
-                console.log(`[INFO] Rebuilding card_tags table (${reason})`);
+                log.info(`Rebuilding card_tags table (${reason})`);
                 rebuildCardTagsTable(db);
             } else {
-                console.log('[INFO] card_tags table already in sync, skipping rebuild');
+                log.info('card_tags table already in sync, skipping rebuild');
             }
         }
 
-        console.log('[INFO] Database initialized');
+        log.info('Database initialized');
         return db;
     } catch (error) {
-        console.error('[ERROR] Database init failed:', error);
+        log.error('Database init failed', error);
         throw error;
     }
 }
@@ -714,7 +717,7 @@ export function detectLanguage(text, threshold = 0.8, minLength = 20) {
         const langCode = franc(text, { minLength: 10 });
         return langCode === 'und' ? 'unknown' : langCode;
     } catch (error) {
-        console.error('[ERROR] Language detection failed:', error.message);
+        log.error('Language detection failed', error);
         return 'unknown';
     }
 }
@@ -852,8 +855,7 @@ export function upsertCard(metadata) {
         computedSourceUrl
     );
 
-    console.log(`[DEBUG] Upserting card ${metadata.id}: stars=${metadata.starCount}, favs=${metadata.n_favorites}, ` +
-                `rating=${metadata.rating}, lastModified=${params[14]}`);
+    log.debug(`Upserting card ${metadata.id}: stars=${metadata.starCount}, favs=${metadata.n_favorites}, rating=${metadata.rating}, lastModified=${params[14]}`);
 
     // Use transaction to ensure atomicity of card insert + tags update
     withTransaction((db) => {
@@ -861,7 +863,7 @@ export function upsertCard(metadata) {
         replaceCardTagsForDatabase(db, metadata.id, topicsArray);
     });
 
-    console.log(`[DEBUG] Card ${metadata.id} upserted successfully`);
+    log.debug(`Card ${metadata.id} upserted successfully`);
 }
 
 /**
@@ -1167,7 +1169,7 @@ export function getCards(options = {}) {
     };
 
     const orderBy = sortMap[sort] || sortMap.new;
-    console.log(`[DEBUG] Sort param: "${sort}", Using ORDER BY: ${orderBy}`);
+    log.debug(`Sort param: "${sort}", Using ORDER BY: ${orderBy}`);
     sql += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
@@ -1176,10 +1178,10 @@ export function getCards(options = {}) {
     const cards = database.prepare(sql).all(...params);
 
     if (sort === 'overall_rating_desc' && cards.length > 0) {
-        console.log('[DEBUG] Top 3 results for overall_rating_desc:');
+        log.debug('Top 3 results for overall_rating_desc:');
         cards.slice(0, 3).forEach(card => {
             const score = (card.starCount || 0) * 1.0 + (card.n_favorites || 0) * 2.0;
-            console.log(`  ${card.name}: stars=${card.starCount}, favs=${card.n_favorites}, score=${score}`);
+            log.debug(`  ${card.name}: stars=${card.starCount}, favs=${card.n_favorites}, score=${score}`);
         });
     }
 

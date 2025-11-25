@@ -1,5 +1,8 @@
 import axios from 'axios';
 import { appConfig } from '../services/ConfigState.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('SYNC-SVC');
 
 const CHUB_API_BASE = 'https://gateway.chub.ai/api';
 const DEFAULT_BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36';
@@ -101,7 +104,7 @@ export async function syncFavoriteToChub(cardInfo, favorited) {
         return true;
     } catch (error) {
         const status = error?.response?.status;
-        console.error(`[WARN] Failed to sync favorite (${favorited ? 'add' : 'remove'}) to Chub for project ${remoteId}:`, status || error?.message || error);
+        log.warn(`Failed to sync favorite (${favorited ? 'add' : 'remove'}) to Chub for project ${remoteId}`, error || { status });
         return false;
     }
 }

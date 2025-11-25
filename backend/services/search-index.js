@@ -1,5 +1,8 @@
 import { MeiliSearch } from 'meilisearch';
 import { getDatabase } from '../database.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('SEARCH');
 
 const FILTERABLE_FIELDS = new Set([
     'id',
@@ -126,7 +129,7 @@ export function configureSearchIndex(config = {}) {
 
     const host = (config.host || '').trim();
     if (!host) {
-        console.warn('[WARN] Meilisearch host is not configured');
+        log.warn('Meilisearch host is not configured');
         return false;
     }
 
@@ -135,10 +138,10 @@ export function configureSearchIndex(config = {}) {
         const indexName = (config.indexName || 'cards').trim() || 'cards';
         meiliIndex = meiliClient.index(indexName);
         meiliConfig = { ...config, indexName };
-        console.log(`[INFO] Meilisearch enabled for index "${indexName}"`);
+        log.info(`Meilisearch enabled for index "${indexName}"`);
         return true;
     } catch (error) {
-        console.error('[ERROR] Failed to initialize Meilisearch:', error.message);
+        log.error('Failed to initialize Meilisearch', error);
         meiliClient = null;
         meiliIndex = null;
         meiliConfig = null;
@@ -189,7 +192,7 @@ export function configureVectorSearch(config = {}) {
     vectorSearchConfig = sanitized;
     vectorIndexReady = false;
     if (vectorSearchConfig.enabled) {
-        console.log(`[INFO] Vector search configured (cards=${vectorSearchConfig.cardsIndex}, chunks=${vectorSearchConfig.chunksIndex})`);
+        log.info(`Vector search configured (cards=${vectorSearchConfig.cardsIndex}, chunks=${vectorSearchConfig.chunksIndex})`);
     }
     return vectorSearchConfig.enabled;
 }
@@ -612,7 +615,7 @@ async function runFederatedMultiSearch({
         });
     } catch (error) {
         if (isFederationSortUnsupported(error)) {
-            console.warn('[WARN] Federation sort unsupported, falling back to manual OR search');
+            log.warn('Federation sort unsupported, falling back to manual OR search');
             return runManualMultiOrSearch({
                 phrases,
                 filter,
@@ -974,7 +977,7 @@ async function ensureVectorIndex(uid, primaryKey = 'id') {
     try {
         const indexInfo = await meiliClient.getIndex(trimmed);
         if (!indexInfo?.primaryKey && primaryKey) {
-            console.log(`[INFO] Setting primary key "${primaryKey}" on index "${trimmed}"`);
+            log.info(`Setting primary key "${primaryKey}" on index "${trimmed}"`);
             const task = await meiliClient.updateIndex(trimmed, { primaryKey });
             await waitForIndexTask(null, task);
         }
@@ -982,7 +985,7 @@ async function ensureVectorIndex(uid, primaryKey = 'id') {
     } catch (error) {
         const message = error?.message || '';
         if (message.includes('index_not_found') || message.includes('not found')) {
-            console.log(`[INFO] Creating Meilisearch index "${trimmed}" (primaryKey=${primaryKey})`);
+            log.info(`Creating Meilisearch index "${trimmed}" (primaryKey=${primaryKey})`);
             const task = await meiliClient.createIndex(trimmed, { primaryKey });
             await waitForIndexTask(null, task);
             return meiliClient.index(trimmed);
@@ -995,7 +998,7 @@ function resolveEmbedDimensions(observedLength = null) {
     const configured = Number(vectorSearchConfig.embedDimensions);
     if (Number.isFinite(configured) && configured > 0) {
         if (observedLength && configured !== observedLength) {
-            console.warn(`[WARN] vectorSearch.embedDimensions (${configured}) does not match embed length (${observedLength}). Using observed length.`);
+            log.warn(`vectorSearch.embedDimensions (${configured}) does not match embed length (${observedLength}). Using observed length.`);
             vectorSearchConfig.embedDimensions = observedLength;
             return observedLength;
         }
@@ -1025,7 +1028,7 @@ async function waitForIndexTask(index, task) {
         try {
             await meiliClient.waitForTask(taskUid, waitOpts);
         } catch (error) {
-            console.warn('[WARN] Failed waiting for Meilisearch task:', error?.message || error);
+            log.warn('Failed waiting for Meilisearch task', error);
         }
     } else if (meiliClient?.tasks && typeof meiliClient.tasks.getTask === 'function') {
         const start = Date.now();
@@ -1033,7 +1036,7 @@ async function waitForIndexTask(index, task) {
             const taskStatus = await meiliClient.tasks.getTask(taskUid);
             if (!taskStatus || taskStatus.status === 'enqueued' || taskStatus.status === 'processing') {
                 if (Date.now() - start > 60000) {
-                    console.warn(`[WARN] Timed out waiting for Meilisearch task ${taskUid}`);
+                    log.warn(`Timed out waiting for Meilisearch task ${taskUid}`);
                     break;
                 }
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -1130,7 +1133,7 @@ async function ensureVectorIndexesReady(observedLength) {
             if (Object.keys(pendingSettings).length > 0) {
                 const task = await index.updateSettings(pendingSettings);
                 await waitForIndexTask(index, task);
-                console.log(`[INFO] Updated settings for index "${uid}" (${Object.keys(pendingSettings).join(', ')})`);
+                log.info(`Updated settings for index "${uid}" (${Object.keys(pendingSettings).join(', ')})`);
             }
 
             try {
@@ -1142,7 +1145,7 @@ async function ensureVectorIndexesReady(observedLength) {
                     chunksDocs = docCount;
                 }
             } catch (error) {
-                console.warn(`[WARN] Failed to read stats for index "${uid}":`, error?.message || error);
+                log.warn(`Failed to read stats for index "${uid}"`, error);
             }
         }
         if (!cardsDocs || cardsDocs <= 0) {
@@ -1151,7 +1154,7 @@ async function ensureVectorIndexesReady(observedLength) {
         }
         chunkIndexHasDocs = typeof chunksDocs === 'number' ? chunksDocs > 0 : false;
         if (!chunkIndexHasDocs) {
-            console.warn('[WARN] Vector chunk index appears empty; chunk highlights will be disabled until you run `npm run vector:backfill`.');
+            log.warn('Vector chunk index appears empty; chunk highlights will be disabled until you run `npm run vector:backfill`.');
         }
         vectorIndexReady = true;
     })().finally(() => {
@@ -1383,8 +1386,8 @@ function adaptFilterForChunks(filterExpr = '') {
         const ast = parseBooleanExpression(tokens);
         if (!ast) {
             // Log parsing failure with input for debugging
-            console.error('[ERROR] Failed to parse chunk filter AST. Input:', filterExpr);
-            console.warn('[WARN] Falling back to simple replacement for chunk filter');
+            log.error('Failed to parse chunk filter AST', null, { input: filterExpr });
+            log.warn('Falling back to simple replacement for chunk filter');
             let adapted = filterExpr;
             CHUNK_FILTER_SIMPLE_MAPPINGS.forEach(({ from, to }) => {
                 adapted = adapted.replace(from, to);
@@ -1395,25 +1398,23 @@ function adaptFilterForChunks(filterExpr = '') {
         // Transform AST
         const transformed = transformChunkFilterNode(ast);
         if (!transformed) {
-            console.warn('[WARN] Chunk filter transformation resulted in null (likely all unsupported attributes)');
+            log.warn('Chunk filter transformation resulted in null (likely all unsupported attributes)');
             return null;
         }
 
         // Rebuild expression
         const rebuilt = rebuildFilterExpression(transformed);
         if (!rebuilt) {
-            console.warn('[WARN] Failed to rebuild chunk filter expression from AST');
+            log.warn('Failed to rebuild chunk filter expression from AST');
             return null;
         }
         return rebuilt;
     } catch (error) {
         // Log the actual error with full context for debugging
-        console.error('[ERROR] Failed to adapt chunk filter:', error.message);
-        console.error('[ERROR] Filter input:', filterExpr);
-        console.error('[ERROR] Stack trace:', error.stack);
+        log.error('Failed to adapt chunk filter', error, { input: filterExpr });
 
         // Attempt simple fallback only for non-syntax errors
-        console.warn('[WARN] Attempting simple replacement fallback for chunk filter');
+        log.warn('Attempting simple replacement fallback for chunk filter');
         try {
             let adapted = filterExpr;
             CHUNK_FILTER_SIMPLE_MAPPINGS.forEach(({ from, to }) => {
@@ -1421,15 +1422,15 @@ function adaptFilterForChunks(filterExpr = '') {
             });
             const result = stripUnsupportedClauses(adapted);
             if (result) {
-                console.info('[INFO] Fallback replacement succeeded for chunk filter');
+                log.info('Fallback replacement succeeded for chunk filter');
                 return result;
             }
             else {
-                console.warn('[WARN] Fallback replacement produced null result');
+                log.warn('Fallback replacement produced null result');
                 return null;
             }
         } catch (fallbackError) {
-            console.error('[ERROR] Fallback replacement also failed:', fallbackError.message);
+            log.error('Fallback replacement also failed', fallbackError);
             return null;
         }
     }
@@ -1658,22 +1659,22 @@ export async function rebuildSearchIndexFromRows(rows = []) {
         ? rows.map(buildSearchDocumentFromRow).filter(Boolean)
         : [];
 
-    console.log(`[INFO] Applying default settings to index`);
+    log.info('Applying default settings to index');
     await applyDefaultSettings();
 
-    console.log(`[INFO] Clearing existing documents`);
+    log.info('Clearing existing documents');
     const deleteTask = await meiliIndex.deleteAllDocuments();
     await waitForIndexTask(meiliIndex, deleteTask);
 
     const batches = chunkArray(documents, 1000);
-    console.log(`[INFO] Indexing ${documents.length} documents in ${batches.length} batches`);
+    log.info(`Indexing ${documents.length} documents in ${batches.length} batches`);
 
     for (let i = 0; i < batches.length; i += 1) {
         const batch = batches[i];
         if (batch.length === 0) continue;
         const task = await meiliIndex.addDocuments(batch, { primaryKey: 'id' });
         await waitForIndexTask(meiliIndex, task);
-        console.log(`[INFO] Indexed batch ${i + 1}/${batches.length} (${batch.length} documents)`);
+        log.info(`Indexed batch ${i + 1}/${batches.length} (${batch.length} documents)`);
     }
 
     return {
@@ -1701,9 +1702,9 @@ export async function runSearchIndexRefresh(reason = 'manual') {
         const rows = database.prepare('SELECT * FROM cards').all();
         const result = await rebuildSearchIndexFromRows(rows);
         const count = result?.documents ?? rows.length;
-        console.log(`[INFO] Meilisearch index refreshed (${count} docs) [reason=${reason}]`);
+        log.info(`Meilisearch index refreshed (${count} docs) [reason=${reason}]`);
     } catch (error) {
-        console.error(`[ERROR] Failed to refresh Meilisearch index (${reason}):`, error?.message || error);
+        log.error(`Failed to refresh Meilisearch index (${reason})`, error);
     } finally {
         searchIndexRefreshInFlight = false;
         if (searchIndexRefreshQueued) {
@@ -1738,10 +1739,10 @@ export async function drainSearchIndexQueue(reason = 'manual') {
         } while (queueHasMore && iterations < 5);
 
         if (totalProcessed > 0) {
-            console.log(`[INFO] Meilisearch incremental update processed ${totalProcessed} jobs [reason=${reason}]`);
+            log.info(`Meilisearch incremental update processed ${totalProcessed} jobs [reason=${reason}]`);
         }
     } catch (error) {
-        console.error(`[ERROR] Failed to process Meilisearch queue (${reason}):`, error?.message || error);
+        log.error(`Failed to process Meilisearch queue (${reason})`, error);
     } finally {
         searchIndexQueueDrainInFlight = false;
     }

@@ -4,6 +4,9 @@ import { appConfig } from '../services/ConfigState.js';
 import { sillyTavernService } from '../services/SillyTavernService.js';
 import { schedulerService } from '../services/SchedulerService.js';
 import { configureSearchIndex, configureVectorSearch, isSearchIndexEnabled, drainSearchIndexQueue } from '../services/search-index.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('CONFIG');
 
 class ConfigController {
     getConfig = (req, res) => {
@@ -39,7 +42,7 @@ class ConfigController {
             
             res.json({ message: 'Successfully updated the config' });
         } catch (error) {
-            console.error('[ERROR] Set config error:', error);
+            log.error('Set config error', error);
             res.status(500).json({ error: error.message });
         }
     };

@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from './logger.js';
+
+const log = logger.scoped('CARD-UTIL');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,7 +40,7 @@ export function readCardPngSpec(cardId) {
                     try {
                         return JSON.parse(decoded);
                     } catch (error) {
-                        console.warn('[WARN] Failed to parse embedded PNG spec:', error?.message || error);
+                        log.warn('Failed to parse embedded PNG spec', error);
                         return null;
                     }
                 }
@@ -101,7 +104,7 @@ export function deriveFeatureFlagsFromSpec(specData = {}) {
             flags.hasEmbeddedImages = hasImages;
         }
     } catch (error) {
-        console.warn('[WARN] Failed to derive feature flags from spec:', error?.message || error);
+        log.warn('Failed to derive feature flags from spec', error);
     }
     return flags;
 }

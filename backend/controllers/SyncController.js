@@ -7,6 +7,8 @@ import { logger } from '../utils/logger.js';
 import { appConfig } from '../services/ConfigState.js';
 import { drainSearchIndexQueue } from '../services/search-index.js';
 
+const log = logger.scoped('SYNC');
+
 class SyncController {
     async getChubFollows(req, res) {
         try {
@@ -19,7 +21,7 @@ class SyncController {
             const result = await fetchChubFollows(profile);
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Failed to fetch Chub follows:', error?.message || error);
+            log.error('Failed to fetch Chub follows', error);
             res.status(502).json({ error: error?.message || 'Failed to fetch followed creators from Chub' });
         }
     }
@@ -52,7 +54,7 @@ class SyncController {
             await drainSearchIndexQueue('manual-sync');
             res.end();
         } catch (error) {
-            console.error('[ERROR] Sync error:', error);
+            log.error('Sync error', error);
             res.write(`data: ${JSON.stringify({ error: error.message })}
 
 `);
@@ -94,7 +96,7 @@ class SyncController {
             await drainSearchIndexQueue('ct-sync');
             res.end();
         } catch (error) {
-            console.error('[ERROR] CT Sync error:', error);
+            log.error('CT Sync error', error);
             res.write(`data: ${JSON.stringify({ error: error.message })}
 
 `);
@@ -163,7 +165,7 @@ class SyncController {
                 stats
             });
         } catch (error) {
-            console.error('[ERROR] Favorite sync to Chub failed:', error);
+            log.error('Favorite sync to Chub failed', error);
             res.status(500).json({ success: false, message: error.message || 'Failed to sync favorites to Chub' });
         }
     }

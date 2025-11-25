@@ -1,6 +1,9 @@
 
 import NodeCache from 'node-cache';
 import { searchTags, getTagAliasesSnapshot, getRandomTags } from '../database.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('TAG');
 
 const tagCache = new NodeCache({
     stdTTL: 3600,  // 1 hour (tags change rarely)
@@ -27,7 +30,7 @@ class TagController {
             res.set('X-Cache', 'MISS');
             res.json(tags);
         } catch (error) {
-            console.error('[ERROR] Search tags error:', error);
+            log.error('Search tags error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -37,7 +40,7 @@ class TagController {
             const aliases = getTagAliasesSnapshot();
             res.json({ aliases });
         } catch (error) {
-            console.error('[ERROR] Fetch tag aliases error:', error);
+            log.error('Fetch tag aliases error', error);
             res.status(500).json({ error: 'Failed to load tag aliases' });
         }
     };
@@ -47,7 +50,7 @@ class TagController {
             const tags = getRandomTags();
             res.json(tags);
         } catch (error) {
-            console.error('[ERROR] Reroll tags error:', error);
+            log.error('Reroll tags error', error);
             res.status(500).json({ error: error.message });
         }
     };

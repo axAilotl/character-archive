@@ -5,6 +5,9 @@ import { getDatabase } from '../database.js';
 import { readCardPngSpec, deriveFeatureFlagsFromSpec, getCardFilePaths } from '../utils/card-utils.js';
 import { resolveTokenCountsFromMetadata, extractTokenCountLabel, normalizeTokenCounts } from '../utils/token-counts.js';
 import { appConfig } from '../services/ConfigState.js'; // if needed
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('ADMIN');
 
 // Helper
 const STATIC_DIR = path.join(process.cwd(), 'static');
@@ -26,7 +29,7 @@ function readMetadataFile(cardId) {
         const content = fs.readFileSync(jsonPath, 'utf8');
         return JSON.parse(content);
     } catch (error) {
-        console.error(`[ERROR] Failed to read metadata for ${cardId}:`, error.message);
+        log.error(`Failed to read metadata for ${cardId}`, error);
         return null;
     }
 }
@@ -156,7 +159,7 @@ class AdminController {
                 message: `Backfilled ${updated} cards`
             });
         } catch (error) {
-            console.error('[ERROR] Token count backfill error:', error);
+            log.error('Token count backfill error', error);
             res.status(500).json({ success: false, message: error.message || 'Failed to backfill token counts' });
         }
     };
@@ -238,7 +241,7 @@ class AdminController {
 
                         updated++;
                     } catch (error) {
-                        console.error(`[ERROR] Failed to process card ${card.id}:`, error.message);
+                        log.error(`Failed to process card ${card.id}`, error);
                         skipped++;
                     }
                 }
@@ -256,7 +259,7 @@ class AdminController {
                 message: `Backfilled ${updated} cards`
             });
         } catch (error) {
-            console.error('[ERROR] Feature flag backfill error:', error);
+            log.error('Feature flag backfill error', error);
             res.status(500).json({ success: false, message: error.message || 'Failed to backfill feature flags' });
         }
     };

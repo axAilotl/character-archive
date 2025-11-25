@@ -5,6 +5,9 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { getDatabase } from '../database.js';
 import { readCardPngSpec } from '../utils/card-utils.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('ASSET-CACHE');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -147,7 +150,7 @@ function readJsonFileSafe(filePath) {
         const raw = fs.readFileSync(filePath, 'utf8');
         return JSON.parse(raw);
     } catch (error) {
-        console.warn(`[ASSET-CACHE] Failed to read JSON from ${filePath}:`, error.message);
+        log.warn(`Failed to read JSON from ${filePath}`, error);
         return null;
     }
 }
@@ -156,7 +159,7 @@ function writeJsonFileSafe(filePath, payload) {
     try {
         fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
     } catch (error) {
-        console.warn(`[ASSET-CACHE] Failed to write JSON to ${filePath}:`, error.message);
+        log.warn(`Failed to write JSON to ${filePath}`, error);
     }
 }
 
@@ -274,7 +277,7 @@ function extractPngData(cardId) {
     try {
         return readCardPngSpec(cardId);
     } catch (error) {
-        console.error(`[ASSET-SCAN] Error extracting PNG data:`, error);
+        log.error('Error extracting PNG data', error);
         return null;
     }
 }
@@ -322,10 +325,10 @@ export async function scanCardForUrls(cardId) {
         // Deduplicate
         const uniqueUrls = [...new Set(allUrls)];
 
-        console.log(`[ASSET-SCAN] Card ${cardId}: Found ${uniqueUrls.length} media URLs`);
+        log.debug(`Card ${cardId}: Found ${uniqueUrls.length} media URLs`);
         return { urls: uniqueUrls, error: null };
     } catch (error) {
-        console.error(`[ASSET-SCAN] Error scanning card ${cardId}:`, error);
+        log.error(`Error scanning card ${cardId}`, error);
         return { urls: [], error: error.message };
     }
 }
@@ -353,7 +356,7 @@ async function downloadAsset(url, cardId, options = {}) {
 
         // Skip if already downloaded
         if (fs.existsSync(localPath)) {
-            console.log(`[ASSET-CACHE] Already cached: ${url}`);
+            log.debug(`Already cached: ${url}`);
             const stats = fs.statSync(localPath);
             return {
                 success: true,
@@ -366,7 +369,7 @@ async function downloadAsset(url, cardId, options = {}) {
         }
 
         // Download with timeout
-        console.log(`[ASSET-CACHE] Downloading: ${url}`);
+        log.debug(`Downloading: ${url}`);
         const response = await axios.get(url, {
             responseType: 'arraybuffer',
             timeout: 30000,
@@ -380,7 +383,7 @@ async function downloadAsset(url, cardId, options = {}) {
         fs.writeFileSync(localPath, response.data);
         const fileSize = fs.statSync(localPath).size;
 
-        console.log(`[ASSET-CACHE] Downloaded: ${url} (${(fileSize / 1024).toFixed(2)} KB)`);
+        log.debug(`Downloaded: ${url} (${(fileSize / 1024).toFixed(2)} KB)`);
 
         return {
             success: true,
@@ -391,7 +394,7 @@ async function downloadAsset(url, cardId, options = {}) {
             metadata
         };
     } catch (error) {
-        console.error(`[ASSET-CACHE] Failed to download ${url}:`, error.message);
+        log.warn(`Failed to download ${url}`, error);
         return { success: false, error: error.message };
     }
 }
@@ -413,7 +416,7 @@ export async function cacheCardAssets(cardId) {
             return { success: true, cached: 0, failed: 0, message: 'No media URLs found' };
         }
 
-        console.log(`[ASSET-CACHE] Caching ${urls.length} assets for card ${cardId}`);
+        log.info(`Caching ${urls.length} assets for card ${cardId}`);
 
         const results = { cached: 0, failed: 0, skipped: 0 };
 
@@ -435,14 +438,14 @@ export async function cacheCardAssets(cardId) {
                         VALUES (?, ?, ?, ?, ?, ?)
                     `).run(cardId, url, result.localPath, result.assetType, result.fileSize || 0, result.metadata ? JSON.stringify(result.metadata) : null);
                 } catch (dbError) {
-                    console.error(`[ASSET-CACHE] DB error:`, dbError);
+                    log.error('DB error', dbError);
                 }
             } else {
                 results.failed++;
             }
         }
 
-        console.log(`[ASSET-CACHE] Card ${cardId}: ${results.cached} cached, ${results.skipped} skipped, ${results.failed} failed`);
+        log.info(`Card ${cardId}: ${results.cached} cached, ${results.skipped} skipped, ${results.failed} failed`);
 
         return {
             success: true,
@@ -452,7 +455,7 @@ export async function cacheCardAssets(cardId) {
             total: urls.length
         };
     } catch (error) {
-        console.error(`[ASSET-CACHE] Error caching assets for card ${cardId}:`, error);
+        log.error(`Error caching assets for card ${cardId}`, error);
         return { success: false, error: error.message };
     }
 }
@@ -483,7 +486,7 @@ async function fetchGalleryNodes(client, cardId, limit, maxAttempts) {
             }
 
             const delayMs = 1000 * attempt;
-            console.warn(`[ASSET-CACHE] Gallery request DNS failure for card ${cardId}, retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
+            log.warn(`Gallery request DNS failure for card ${cardId}, retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
             await sleep(delayMs);
         }
     }
@@ -517,7 +520,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
                 nodesPayload = cachedNodes;
                 usedCache = true;
             } else if (cachedNodes) {
-                console.log(`[ASSET-CACHE] Gallery nodes stale for card ${cardId}`);
+                log.debug(`Gallery nodes stale for card ${cardId}`);
             }
         }
 
@@ -527,12 +530,12 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
             writeJsonFileSafe(nodesPath, nodesPayload);
             usedCache = false;
         } else {
-            console.log(`[ASSET-CACHE] Using cached gallery nodes for card ${cardId}`);
+            log.debug(`Using cached gallery nodes for card ${cardId}`);
         }
 
         let items = extractGalleryItems(nodesPayload);
         if (items.length === 0 && usedCache) {
-            console.log(`[ASSET-CACHE] Cached gallery nodes empty for card ${cardId}, refreshing from network`);
+            log.debug(`Cached gallery nodes empty for card ${cardId}, refreshing from network`);
             nodesPayload = await fetchGalleryNodes(client, cardId, limit, maxAttempts);
             nodesPayload.cardId = cardId;
             writeJsonFileSafe(nodesPath, nodesPayload);
@@ -541,7 +544,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
         }
 
         if (items.length === 0) {
-            console.log(`[ASSET-CACHE] No gallery items for card ${cardId}`);
+            log.debug(`No gallery items for card ${cardId}`);
             return {
                 success: true,
                 cached: 0,
@@ -554,7 +557,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
             };
         }
 
-        console.log(`[ASSET-CACHE] Caching ${items.length} gallery assets for card ${cardId}`);
+        log.info(`Caching ${items.length} gallery assets for card ${cardId}`);
 
         const db = getDatabase();
         const results = { cached: 0, skipped: 0, failed: 0, total: items.length };
@@ -606,7 +609,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
                         VALUES (?, ?, ?, ?, ?, ?)
                     `).run(cardId, item.url, result.localPath, result.assetType, result.fileSize || 0, JSON.stringify(metadata));
                 } catch (dbError) {
-                    console.error('[ASSET-CACHE] DB error storing gallery asset:', dbError);
+                    log.error('DB error storing gallery asset', dbError);
                 }
 
                 assets.push({
@@ -623,7 +626,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
             }
         }
 
-        console.log(`[ASSET-CACHE] Gallery cache complete for ${cardId}: ${results.cached} cached, ${results.skipped} skipped, ${results.failed} failed`);
+        log.info(`Gallery cache complete for ${cardId}: ${results.cached} cached, ${results.skipped} skipped, ${results.failed} failed`);
 
         return {
             success: true,
@@ -634,7 +637,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
         };
     } catch (error) {
         if (error?.response?.status === 401 || error?.response?.status === 403) {
-            console.warn(`[ASSET-CACHE] Gallery request unauthorized for card ${cardId}`);
+            log.warn(`Gallery request unauthorized for card ${cardId}`);
             return {
                 success: false,
                 error: 'Gallery download requires a valid Chub API key',
@@ -645,7 +648,7 @@ export async function cacheGalleryAssets(cardId, apiKey = '', options = {}) {
             };
         }
 
-        console.error(`[ASSET-CACHE] Error caching gallery for card ${cardId}:`, error);
+        log.error(`Error caching gallery for card ${cardId}`, error);
         return {
             success: false,
             error: error?.message || 'Unknown gallery error',
@@ -671,7 +674,7 @@ export async function getCachedAssets(cardId) {
 
         return { success: true, assets };
     } catch (error) {
-        console.error(`[ASSET-CACHE] Error getting cached assets:`, error);
+        log.error('Error getting cached assets', error);
         return { success: false, error: error.message, assets: [] };
     }
 }
@@ -721,7 +724,7 @@ export async function getGalleryAssets(cardId) {
 
         return { success: true, assets };
     } catch (error) {
-        console.error(`[ASSET-CACHE] Error getting gallery assets:`, error);
+        log.error('Error getting gallery assets', error);
         return { success: false, error: error.message, assets: [] };
     }
 }
@@ -762,10 +765,10 @@ export async function clearCardAssets(cardId, options = {}) {
             : 'DELETE FROM cached_assets WHERE cardId = ?';
         db.prepare(deleteSql).run(...params);
 
-        console.log(`[ASSET-CACHE] Cleared ${assetType || 'all'} assets for card ${cardId}`);
+        log.info(`Cleared ${assetType || 'all'} assets for card ${cardId}`);
         return { success: true, removed: assets.length };
     } catch (error) {
-        console.error(`[ASSET-CACHE] Error clearing assets:`, error);
+        log.error('Error clearing assets', error);
         return { success: false, error: error.message };
     }
 }
@@ -813,7 +816,7 @@ export async function rewriteCardUrls(cardId, useLocal = true) {
 
         return { success: true, metadata: modifiedMetadata, replacements: urlMap.size };
     } catch (error) {
-        console.error(`[ASSET-CACHE] Error rewriting URLs:`, error);
+        log.error('Error rewriting URLs', error);
         return { success: false, error: error.message };
     }
 }

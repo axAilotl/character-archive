@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 
 import { getDatabase, detectLanguage } from '../database.js';
 import { isCtBlacklisted } from '../utils/ct-blacklist.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('CT-SYNC');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -427,7 +430,7 @@ export async function syncCharacterTavern(appConfig = {}, progressCallback = nul
         fs.writeFileSync(path.join(folder, `${cardIdStr}.json`), JSON.stringify(metadataPayload, null, 2));
         added += 1;
       } catch (error) {
-        console.error('[ERROR] Failed to import CT card', hit?.name || hit?.path || hit?.id, error?.message || error);
+        log.error(`Failed to import CT card ${hit?.name || hit?.path || hit?.id}`, error);
         skipped += 1;
       }
 

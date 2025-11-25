@@ -4,6 +4,9 @@ import { syncCards } from './scraper.js';
 import { syncCharacterTavern } from './ct-sync.js';
 import { drainSearchIndexQueue, isSearchIndexEnabled } from './search-index.js';
 import { lockService } from './LockService.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('SCHEDULER');
 
 class SchedulerService {
     constructor() {
@@ -48,7 +51,7 @@ class SchedulerService {
                 console.log('[INFO] Auto-update complete');
                 await drainSearchIndexQueue('auto-update');
             } catch (error) {
-                console.error('[ERROR] Auto-update failed:', error.message);
+                log.error('Auto-update failed', error);
             } finally {
                 lockService.setSyncInProgress(false);
             }
@@ -88,7 +91,7 @@ class SchedulerService {
                 console.log('[INFO] Character Tavern auto-sync complete');
                 await drainSearchIndexQueue('ct-auto-sync');
             } catch (error) {
-                console.error('[ERROR] Character Tavern auto-sync failed:', error.message);
+                log.error('Character Tavern auto-sync failed', error);
             } finally {
                 lockService.setCtSyncInProgress(false);
             }

@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from './logger.js';
+
+const log = logger.scoped('CT-BLACKLIST');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +30,7 @@ function ensureLoaded() {
             .filter(Boolean)
             .forEach(id => ctBlacklist.add(id));
     } catch (error) {
-        console.warn('[WARN] Failed to read ct-blacklist.txt:', error.message);
+        log.warn('Failed to read ct-blacklist.txt', error);
     } finally {
         loaded = true;
     }
@@ -54,7 +57,7 @@ export function addCtBlacklistEntry(sourceId) {
     try {
         fs.appendFileSync(CT_BLACKLIST_FILE, `${normalized}\n`);
     } catch (error) {
-        console.error('[ERROR] Failed to append to ct-blacklist.txt:', error.message);
+        log.error('Failed to append to ct-blacklist.txt', error);
     }
 }
 

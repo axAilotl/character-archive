@@ -1,5 +1,8 @@
 import fs from 'fs';
 import extractChunks from 'png-chunks-extract';
+import { logger } from './logger.js';
+
+const log = logger.scoped('PNG-UTIL');
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
 
@@ -25,7 +28,7 @@ function extractPngDimensions(buffer) {
 
         return { width, height };
     } catch (error) {
-        console.warn(`[WARN] Failed to extract PNG dimensions:`, error.message);
+        log.warn('Failed to extract PNG dimensions', error);
         return { width: 0, height: 0 };
     }
 }

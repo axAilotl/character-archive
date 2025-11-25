@@ -4,6 +4,9 @@ import path from 'path';
 import { getDatabase } from '../database.js';
 import { appConfig } from '../services/ConfigState.js';
 import { cacheGalleryAssets, getGalleryAssets, clearCardAssets } from './asset-cache.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('CARD-SVC');
 
 const STATIC_DIR = path.join(process.cwd(), 'static');
 
@@ -12,7 +15,7 @@ export async function setCardGalleryFlag(cardId, hasGallery) {
         const db = getDatabase();
         db.prepare('UPDATE cards SET hasGallery = ? WHERE id = ?').run(hasGallery ? 1 : 0, cardId);
     } catch (error) {
-        console.error(`[WARN] Failed to update gallery flag in database for ${cardId}:`, error.message);
+        log.warn(`Failed to update gallery flag in database for ${cardId}`, error);
     }
 
     try {
@@ -28,7 +31,7 @@ export async function setCardGalleryFlag(cardId, hasGallery) {
             }
         }
     } catch (error) {
-        console.error(`[WARN] Failed to update metadata for card ${cardId}:`, error.message);
+        log.warn(`Failed to update metadata for card ${cardId}`, error);
     }
 }
 
@@ -37,7 +40,7 @@ export async function setCardFavoriteFlag(cardId, favorited) {
         const db = getDatabase();
         db.prepare('UPDATE cards SET favorited = ? WHERE id = ?').run(favorited ? 1 : 0, cardId);
     } catch (error) {
-        console.error(`[WARN] Failed to update favorite flag in database for ${cardId}:`, error.message);
+        log.warn(`Failed to update favorite flag in database for ${cardId}`, error);
     }
 
     try {
@@ -56,7 +59,7 @@ export async function setCardFavoriteFlag(cardId, favorited) {
             }
         }
     } catch (error) {
-        console.error(`[WARN] Failed to update favorite metadata for card ${cardId}:`, error.message);
+        log.warn(`Failed to update favorite metadata for card ${cardId}`, error);
     }
 }
 
@@ -81,7 +84,7 @@ export async function refreshGalleryIfNeeded(cardId) {
                     hasGallery = !!metadata.hasGallery;
                 }
             } catch (error) {
-                console.warn(`[WARN] Failed to inspect metadata for gallery on card ${cardId}:`, error.message);
+                log.warn(`Failed to inspect metadata for gallery on card ${cardId}`, error);
             }
         }
 
@@ -106,7 +109,7 @@ export async function refreshGalleryIfNeeded(cardId) {
         await setCardGalleryFlag(cardId, hasGallery);
         return galleryResult;
     } catch (error) {
-        console.error(`[WARN] Gallery refresh failed for card ${cardId}:`, error.message);
+        log.warn(`Gallery refresh failed for card ${cardId}`, error);
         return null;
     }
 }

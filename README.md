@@ -182,6 +182,21 @@ To ensure your archive is truly offline:
 *   `npm run fix:flags`: Scans all cards and updates database feature flags (like `hasEmbeddedImages`).
 *   `npm run sync:search`: Pushes all local database content to Meilisearch (for lexical search).
 
+### Logging
+The application uses a centralized logging system with scoped loggers for each component. Log output follows the format `[LEVEL][SCOPE] message`.
+
+**Log Levels:** `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`
+
+To enable verbose debug logging, set the `LOG_LEVEL` environment variable:
+```bash
+LOG_LEVEL=DEBUG npm run dev
+```
+
+Filter logs by component using grep:
+```bash
+npm run dev 2>&1 | grep '\[SYNC\]'
+```
+
 ---
 
 ## ⚠️ Troubleshooting

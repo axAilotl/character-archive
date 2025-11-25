@@ -5,13 +5,11 @@ import type { FiltersState } from "../types/filters";
 
 interface UseCardDataResult {
   cards: Card[];
-  page: number;
   totalPages: number;
   count: number;
   vectorMeta: CardsResponse["vector"] | null;
   isLoading: boolean;
   error: string | null;
-  setPage: (page: number) => void;
   setCards: React.Dispatch<React.SetStateAction<Card[]>>;
   setCount: React.Dispatch<React.SetStateAction<number>>;
   loadCards: () => Promise<CardsResponse | null>;
@@ -24,10 +22,9 @@ interface UseCardDataResult {
  */
 export function useCardData(
   filters: FiltersState,
-  initialPage: number = 1
+  page: number = 1
 ): UseCardDataResult {
   const [cards, setCards] = useState<Card[]>([]);
-  const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
   const [count, setCount] = useState(0);
   const [vectorMeta, setVectorMeta] = useState<CardsResponse["vector"] | null>(null);
@@ -138,13 +135,11 @@ export function useCardData(
 
   return {
     cards,
-    page,
     totalPages,
     count,
     vectorMeta,
     isLoading,
     error,
-    setPage,
     setCards,
     setCount,
     loadCards,

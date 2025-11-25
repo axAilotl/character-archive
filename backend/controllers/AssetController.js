@@ -1,6 +1,9 @@
 
 import { scanCardForUrls, cacheCardAssets, getCachedAssets, getGalleryAssets, clearCardAssets } from '../services/asset-cache.js';
 import { appConfig } from '../services/ConfigState.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.scoped('ASSET');
 
 class AssetController {
     scanAssets = async (req, res) => {
@@ -9,7 +12,7 @@ class AssetController {
             const result = await scanCardForUrls(cardId);
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Scan assets error:', error);
+            log.error('Scan assets error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -20,7 +23,7 @@ class AssetController {
             const result = await cacheCardAssets(cardId);
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Cache assets error:', error);
+            log.error('Cache assets error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -31,7 +34,7 @@ class AssetController {
             const result = await getCachedAssets(cardId);
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Get assets error:', error);
+            log.error('Get assets error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -42,7 +45,7 @@ class AssetController {
             const result = await getGalleryAssets(cardId);
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Get gallery error:', error);
+            log.error('Get gallery error', error);
             res.status(500).json({ error: error.message });
         }
     };
@@ -53,7 +56,7 @@ class AssetController {
             const result = await clearCardAssets(cardId);
             res.json(result);
         } catch (error) {
-            console.error('[ERROR] Clear assets error:', error);
+            log.error('Clear assets error', error);
             res.status(500).json({ error: error.message });
         }
     };
