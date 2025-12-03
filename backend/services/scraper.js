@@ -10,6 +10,13 @@ import { hasEmbeddedImages as checkForEmbeddedImages } from '../utils/card-utils
 import { upsertCard, getDatabase } from '../database.js';
 import { resolveTokenCountsFromMetadata, mergeTokenCounts } from '../utils/token-counts.js';
 import { logger } from '../utils/logger.js';
+import { 
+    createChubClient, 
+    rateLimitedRequest, 
+    loadBlacklist, 
+    isBlacklisted 
+} from './ApiClient.js';
+import { syncLinkedLorebooks } from './LorebookService.js';
 
 const scraperLogger = logger.scoped('SCRAPER');
 
@@ -22,67 +29,6 @@ const fsp = fs.promises;
 
 const STATIC_DIR = path.join(__dirname, '../../static');
 const BACKUP_DIR = path.join(__dirname, '../../backup');
-const BLACKLIST_FILE = path.join(__dirname, '../../blacklist.txt');
-
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
-let lastRequestTime = 0;
-const blacklistSet = new Set();
-
-// Load blacklist
-function loadBlacklist() {
-    if (fs.existsSync(BLACKLIST_FILE)) {
-        const content = fs.readFileSync(BLACKLIST_FILE, 'utf8');
-        content.split('\n').forEach(line => {
-            const id = line.trim();
-            if (id) blacklistSet.add(id);
-        });
-    }
-}
-
-function addToBlacklist(cardId) {
-    blacklistSet.add(String(cardId));
-    fs.appendFileSync(BLACKLIST_FILE, `${cardId}\n`);
-}
-
-function isBlacklisted(cardId) {
-    return blacklistSet.has(String(cardId));
-}
-
-// Rate limiting
-async function rateLimitedRequest(url, options = {}) {
-    const now = Date.now();
-    const elapsed = now - lastRequestTime;
-    
-    if (elapsed < MIN_REQUEST_INTERVAL) {
-        await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - elapsed));
-    }
-    
-    lastRequestTime = Date.now();
-    return axios.get(url, options);
-}
-
-/**
- * Create axios instance with proper headers
- */
-function createChubClient(apiKey = '') {
-    return axios.create({
-        headers: {
-            'samwise': apiKey,
-            'CH-API-KEY': apiKey,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
-            'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Origin': 'https://chub.ai',
-            'Connection': 'keep-alive',
-            'Referer': 'https://chub.ai/',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-site'
-        },
-        timeout: 30000
-    });
-}
 
 /**
  * Ensure directory exists
@@ -642,7 +588,8 @@ export async function downloadCard(card, config, options = {}) {
             isFuzzed = true; // Set flag if FUZZ tag present
         }
         await ensureRemoteGallery();
-        await persistMetadata(card);
+        const savedMetadata = await persistMetadata(card);
+        await syncLinkedLorebooks(savedMetadata, client);
         return false;
     }
 
@@ -666,7 +613,8 @@ export async function downloadCard(card, config, options = {}) {
 
             if (needsUpdate) {
                 await ensureRemoteGallery();
-                await persistMetadata(card);
+                const savedMetadata = await persistMetadata(card);
+                await syncLinkedLorebooks(savedMetadata, client);
                 scraperLogger.info(`Updated metadata for ${card.name} (${cardId})`);
             }
         }
@@ -674,7 +622,9 @@ export async function downloadCard(card, config, options = {}) {
         if (!force) {
             if (!shouldDownloadPng) {
                 await ensureRemoteGallery();
-                await persistMetadata(existingMetadata);
+                const savedMetadata = await persistMetadata(existingMetadata);
+                // Also sync lorebooks here, just in case they were missed or updated
+                await syncLinkedLorebooks(savedMetadata, client);
                 scraperLogger.info(`${card.name} (${cardId}) already exists, skipping`);
                 return false;
             }
@@ -800,7 +750,8 @@ export async function downloadCard(card, config, options = {}) {
         if (!imgBuffer) {
             await ensureRemoteGallery();
             if (existingValid) {
-                await persistMetadata(card);
+                const savedMetadata = await persistMetadata(card);
+                await syncLinkedLorebooks(savedMetadata, client);
             } else {
                 scraperLogger.warn(`Skipping ${cardId}: no PNG available and no previous image to fall back to`);
                 await safeUnlink(jsonPath);
@@ -908,7 +859,8 @@ export async function downloadCard(card, config, options = {}) {
                                         scraperLogger.warn(`Could not extract data from fuzzed PNG for ${cardId}`);
                                     }
                 await ensureRemoteGallery();
-                await persistMetadata(card);
+                const savedMetadata = await persistMetadata(card);
+                await syncLinkedLorebooks(savedMetadata, client);
                 return true; // Successfully updated
             }
         }
@@ -925,7 +877,8 @@ export async function downloadCard(card, config, options = {}) {
             if (existingValid) {
                 scraperLogger.warn(`Suspect PNG for ${cardId}, keeping existing image`);
                 await ensureRemoteGallery();
-                await persistMetadata(card);
+                const savedMetadata = await persistMetadata(card);
+                await syncLinkedLorebooks(savedMetadata, client);
                 return false;
             } else {
                 throw new Error('Suspect PNG with no previous image');
@@ -949,7 +902,8 @@ export async function downloadCard(card, config, options = {}) {
             if (!imgBuffer) {
                 await ensureRemoteGallery();
                 if (existingValid) {
-                    await persistMetadata(card);
+                    const savedMetadata = await persistMetadata(card);
+                    await syncLinkedLorebooks(savedMetadata, client);
                 } else {
                     scraperLogger.warn(`Skipping ${cardId}: no PNG available and no previous image to fall back to`);
                     await safeUnlink(jsonPath);
@@ -980,7 +934,8 @@ export async function downloadCard(card, config, options = {}) {
                     }
 
                     await ensureRemoteGallery();
-                    await persistMetadata(card);
+                    const savedMetadata = await persistMetadata(card);
+                    await syncLinkedLorebooks(savedMetadata, client);
                     return true; // Successfully handled
                 }
             }
@@ -994,7 +949,8 @@ export async function downloadCard(card, config, options = {}) {
                 if (existingValid) {
                     scraperLogger.warn(`Suspect fallback PNG for ${cardId}, keeping existing image`);
                     await ensureRemoteGallery();
-                    await persistMetadata(card);
+                    const savedMetadata = await persistMetadata(card);
+                    await syncLinkedLorebooks(savedMetadata, client);
                     return false;
                 } else {
                     scraperLogger.warn(`Suspect fallback PNG for ${cardId} with no previous image`);
@@ -1015,6 +971,7 @@ export async function downloadCard(card, config, options = {}) {
     }
 
     card = await persistMetadata(card);
+    await syncLinkedLorebooks(card, client);
 
     // Force recheck since we just wrote a new file
     let validPng = await pngCheckCached(cardId, metadataCache, true);
