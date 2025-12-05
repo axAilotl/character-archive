@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveTokenCountsFromMetadata, TOKEN_COUNT_COLUMNS } from './utils/token-counts.js';
 import { logger } from './utils/logger.js';
-import { createConnection, getDbInstance } from './db/connection.js';
+import { createConnection, getDbInstance, withTransaction } from './db/connection.js';
 import { ensureSchema } from './db/schema.js';
 
 const log = logger.scoped('DB');
@@ -502,27 +502,6 @@ export function getDatabase() {
     return getDbInstance();
 }
 
-/**
- * Execute a function within a database transaction
- * Provides atomicity for multi-statement operations
- *
- * @param {Function} callback - Function to execute within transaction. Receives db as parameter.
- * @returns {*} - Result from callback function
- *
- * @example
- * withTransaction((db) => {
- *   db.prepare('INSERT INTO cards ...').run(data);
- *   db.prepare('INSERT INTO card_tags ...').run(tags);
- *   return cardId;
- * });
- */
-export function withTransaction(callback) {
-    const database = getDbInstance();
-
-    // Use better-sqlite3 transaction API
-    const transaction = database.transaction(callback);
-    return transaction(database);
-}
 
 /**
  * Detect language of text

@@ -56,3 +56,18 @@ export function closeConnection() {
         log.info('Database connection closed');
     }
 }
+
+/**
+ * Execute a function within a database transaction
+ * Provides atomicity for multi-statement operations
+ *
+ * @param {Function} callback - Function to execute within transaction. Receives db as parameter.
+ * @returns {*} - Result from callback function
+ */
+export function withTransaction(callback) {
+    const database = getDbInstance();
+
+    // Use better-sqlite3 transaction API
+    const transaction = database.transaction(callback);
+    return transaction(database);
+}
