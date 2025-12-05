@@ -76,48 +76,51 @@ export function initDatabase(options = {}) {
 }
 
 /**
+
  * Get database instance
+
  */
+
 export function getDatabase() {
+
     return getDbInstance();
+
 }
 
-/**
- * Execute a function within a database transaction
- * Provides atomicity for multi-statement operations
- *
- * @param {Function} callback - Function to execute within transaction. Receives db as parameter.
- * @returns {*} - Result from callback function
- *
- * @example
- * withTransaction((db) => {
- *   db.prepare('INSERT INTO cards ...').run(data);
- *   db.prepare('INSERT INTO card_tags ...').run(tags);
- *   return cardId;
- * });
- */
-export function withTransaction(callback) {
-    const database = getDbInstance();
 
-    // Use better-sqlite3 transaction API
-    const transaction = database.transaction(callback);
-    return transaction(database);
-}
 
 export {
+
+    withTransaction,
+
     searchTags,
+
     getRandomTags,
+
     getTagAliasesSnapshot,
+
     replaceCardTags,
+
     expandTagSearch,
+
     splitTopicsToArray,
+
     normalizeTagValue,
+
     upsertCard,
+
     getCards,
+
     getCardsByIdsOrdered,
+
     getAllLanguages,
+
     toggleFavorite,
+
     deleteCard,
+
     detectLanguage,
+
     LANGUAGE_MAPPING
+
 };
