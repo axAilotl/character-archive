@@ -250,12 +250,33 @@ async function fetchCtPage({ bearerToken, hitsPerPage, page, minTokens, maxToken
     authorization: `Bearer ${bearerToken}`,
   };
 
-  const response = await axios.post(SEARCH_URL, body, { headers, timeout: 30000 });
-  const payload = response.data;
-  return {
-    hits: payload?.hits || [],
-    totalPages: payload?.totalPages || payload?.totalPagesCount || null,
-  };
+  // Log request details for debugging (masking sensitive info)
+  const maskedHeaders = { ...headers };
+  if (maskedHeaders.authorization) maskedHeaders.authorization = 'Bearer [REDACTED]';
+  if (cookies.length > 0) maskedHeaders.Cookie = '[REDACTED_COOKIES]';
+  
+  log.debug(`Fetching CT page ${page} with headers:`, maskedHeaders);
+
+  try {
+    const response = await axios.post(SEARCH_URL, body, { headers, timeout: 30000 });
+    const payload = response.data;
+    return {
+      hits: payload?.hits || [],
+      totalPages: payload?.totalPages || payload?.totalPagesCount || null,
+    };
+  } catch (error) {
+    if (error?.response?.status === 403) {
+      log.error('CT Sync 403 Forbidden Details:', {
+        status: 403,
+        statusText: error.response.statusText,
+        headers: error.response.headers,
+        data: error.response.data,
+        requestHeaders: maskedHeaders
+      });
+      throw new Error('Character Tavern search returned 403 (check bearer token / Cloudflare cookie)');
+    }
+    throw error;
+  }
 }
 
 function matchesBannedTags(hit, bannedLower) {
