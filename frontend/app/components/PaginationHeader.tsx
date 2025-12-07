@@ -3,6 +3,7 @@ import {
   Database,
   Loader2,
   Moon,
+  Network,
   RefreshCw,
   Settings,
   Sun,
@@ -24,6 +25,7 @@ interface PaginationHeaderProps {
   onRefresh: () => void;
   onSaveSearch: () => void;
   onSync: () => void;
+  onOpenFederation: () => void;
   onOpenSettings: () => void;
   onToggleDarkMode: () => void;
 }
@@ -43,6 +45,7 @@ export function PaginationHeader({
   onRefresh,
   onSaveSearch,
   onSync,
+  onOpenFederation,
   onOpenSettings,
   onToggleDarkMode,
 }: PaginationHeaderProps) {
@@ -91,6 +94,15 @@ export function PaginationHeader({
           >
             {syncing || ctSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             {syncing || ctSyncing ? "Syncing..." : "Sync"}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenFederation}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            aria-label="Federation"
+            title="Federation settings"
+          >
+            <Network className="h-4 w-4" />
           </button>
           <button
             type="button"

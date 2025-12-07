@@ -13,6 +13,7 @@ import { PaginationControls } from "./components/PaginationControls";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SyncStatus, PushNotification } from "./components/StatusBanners";
 import { SettingsModal } from "./components/SettingsModal";
+import { FederationModal } from "./components/FederationModal";
 import { defaultFilters, normalizeFilters } from "./types/filters";
 import { defaultSillyTavernState, defaultCtSyncState, defaultVectorSearchState } from "./types/config";
 import { parseTagString } from "./utils/tags";
@@ -25,10 +26,12 @@ import { useFilters } from "./hooks/useFilters";
 import { useCardDetails } from "./hooks/useCardDetails";
 import { useCardActions } from "./hooks/useCardActions";
 import { useSavedSearches } from "./hooks/useSavedSearches";
+import { resolveUrlCard } from "./utils/urlCard";
 
 function HomeContent() {
   const searchParams = useSearchParams();
   const [darkMode, setDarkMode] = useState(false);
+  const [showFederation, setShowFederation] = useState(false);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [tagAliases, setTagAliases] = useState<Record<string, string[]> | null>(null);
   const [isFetchingChubFollows, setIsFetchingChubFollows] = useState(false);
@@ -141,19 +144,21 @@ function HomeContent() {
     }
   }, [showSettings]);
 
-  // Handle card from URL
+  const urlCardId = getCardIdFromURL();
+  const lastUrlCardIdRef = useRef<string | null>(null);
   useEffect(() => {
-    const cardId = getCardIdFromURL();
-    const currentCardId = selectedCard?.id?.toString();
-    if (!cardId && currentCardId) {
+    const result = resolveUrlCard(urlCardId, cards, lastUrlCardIdRef.current);
+    if (result.action === "clear") {
+      lastUrlCardIdRef.current = result.nextLast;
       setSelectedCard(null);
       return;
     }
-    if (cardId && cards.length > 0 && currentCardId !== cardId) {
-      const card = cards.find(c => c.id.toString() === cardId);
-      if (card) openCardDetails(card);
+    if (result.action === "open") {
+      lastUrlCardIdRef.current = result.nextLast;
+      openCardDetails(result.card);
     }
-  }, [cards, searchParams, selectedCard?.id, getCardIdFromURL, openCardDetails, setSelectedCard]);
+    // action "none" falls through
+  }, [urlCardId, cards, openCardDetails, setSelectedCard]);
 
   // Handlers with proper callbacks
   const handleTagClick = useCallback(async (tag: string) => {
@@ -370,6 +375,7 @@ function HomeContent() {
         onRefresh={() => loadCards()}
         onSaveSearch={() => handleSaveSearch(filters, includeTagsSelected, excludeTagsSelected)}
         onSync={async () => { await startSyncing(); await startCtSyncing(); }}
+        onOpenFederation={() => setShowFederation(true)}
         onOpenSettings={() => setShowSettings(true)}
         onToggleDarkMode={() => setDarkMode(prev => !prev)}
       />
@@ -495,6 +501,10 @@ function HomeContent() {
         defaultSillyTavernState={defaultSillyTavernState}
         defaultCtSyncState={defaultCtSyncState}
         defaultVectorSearchState={defaultVectorSearchState}
+      />
+      <FederationModal
+        show={showFederation}
+        onClose={() => setShowFederation(false)}
       />
     </div>
   );

@@ -26,22 +26,15 @@ async function pathExists(filePath) {
     }
 }
 
-/**
- * Download a single lorebook by ID
- */
 export async function downloadLorebook(lorebookId, client) {
     const id = String(lorebookId);
     const outputPath = path.join(LOREBOOKS_DIR, `${id}.json`);
 
     if (await pathExists(outputPath)) {
-        // For now, skip if exists. In future, we can add update logic similar to cards.
         return false;
     }
 
     try {
-        // Fetch from Chub API
-        // Note: Endpoint might be /api/lorebooks/{id} or similar. 
-        // Based on Chub API patterns: https://gateway.chub.ai/api/lorebooks/{id}
         const response = await rateLimitedRequest(`https://gateway.chub.ai/api/lorebooks/${id}`, {
             headers: client.defaults.headers
         });
@@ -62,11 +55,6 @@ export async function downloadLorebook(lorebookId, client) {
     }
 }
 
-/**
- * Sync all linked lorebooks for a card
- * @param {object} cardMetadata - The card metadata object
- * @param {object} client - Axios client instance
- */
 export async function syncLinkedLorebooks(cardMetadata, client) {
     if (!cardMetadata || !Array.isArray(cardMetadata.related_lorebooks)) {
         return 0;
@@ -76,7 +64,6 @@ export async function syncLinkedLorebooks(cardMetadata, client) {
     const linkedIds = cardMetadata.related_lorebooks;
 
     for (const id of linkedIds) {
-        // Skip invalid IDs (like -1 or null)
         if (!id || id === -1 || id === '-1') continue;
 
         const result = await downloadLorebook(id, client);

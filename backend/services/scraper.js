@@ -623,7 +623,6 @@ export async function downloadCard(card, config, options = {}) {
             if (!shouldDownloadPng) {
                 await ensureRemoteGallery();
                 const savedMetadata = await persistMetadata(existingMetadata);
-                // Also sync lorebooks here, just in case they were missed or updated
                 await syncLinkedLorebooks(savedMetadata, client);
                 scraperLogger.info(`${card.name} (${cardId}) already exists, skipping`);
                 return false;
@@ -1039,6 +1038,8 @@ export async function downloadCard(card, config, options = {}) {
 }
 
 export async function refreshCard(cardId, config) {
+    // Ensure blacklist is loaded so refresh respects skip list
+    loadBlacklist();
     const client = createChubClient(config.apikey);
     const response = await client.get(`https://gateway.chub.ai/api/characters/${cardId}`);
     const payload = response.data;

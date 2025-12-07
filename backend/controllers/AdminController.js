@@ -6,6 +6,7 @@ import { readCardPngSpec, deriveFeatureFlagsFromSpec, getCardFilePaths } from '.
 import { resolveTokenCountsFromMetadata, extractTokenCountLabel, normalizeTokenCounts } from '../utils/token-counts.js';
 import { appConfig } from '../services/ConfigState.js'; // if needed
 import { logger } from '../utils/logger.js';
+import { cacheService } from '../services/CacheService.js';
 
 const log = logger.scoped('ADMIN');
 
@@ -149,7 +150,7 @@ class AdminController {
             updateMany();
 
             console.log(`[INFO] Token count backfill complete: updated ${updated}, skipped ${skipped}, no metadata ${noMetadata}`);
-            // invalidateQueryCache(); 
+            cacheService.flush();
 
             res.json({
                 success: true,
@@ -250,7 +251,7 @@ class AdminController {
             updateMany();
 
             console.log(`[INFO] Feature flag backfill complete: updated ${updated}, skipped ${skipped}`);
-            // invalidateQueryCache();
+            cacheService.flush();
 
             res.json({
                 success: true,

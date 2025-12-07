@@ -59,6 +59,7 @@ export interface Card {
   hasExpressions: boolean;
   silly_link?: string;
   loadedInSillyTavern?: boolean;
+  syncedToArchitect?: boolean;
   source: string;
   sourceId?: string;
   sourcePath?: string;
@@ -205,4 +206,58 @@ export interface ToggleFavoriteResponse {
     message?: string;
     removed?: number;
   } | null;
+}
+
+// Federation Types
+export interface FederationPlatform {
+  id: number;
+  platform: string;
+  display_name: string;
+  base_url: string | null;
+  api_key: string | null;
+  enabled: number;
+  last_connected_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyncState {
+  id: number;
+  card_id: number;
+  platform: string;
+  platform_id: string | null;
+  last_sync_at: string | null;
+  local_hash: string | null;
+  remote_hash: string | null;
+  status: 'pending' | 'synced' | 'conflict' | 'error';
+  error_message: string | null;
+  display_name: string;
+  base_url: string | null;
+  enabled: number;
+}
+
+export interface ConnectionTestResult {
+  connected: boolean;
+  error?: string;
+  data?: unknown;
+}
+
+export interface PushResult {
+  success: boolean;
+  remoteId?: string;
+  filename?: string;
+  error?: string;
+}
+
+export interface BulkPushResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{
+    cardId: string;
+    success: boolean;
+    remoteId?: string;
+    filename?: string;
+    error?: string;
+  }>;
 }

@@ -7,11 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BLACKLIST_FILE = path.join(__dirname, '../../blacklist.txt');
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+const MIN_REQUEST_INTERVAL = 1000;
 let lastRequestTime = 0;
 const blacklistSet = new Set();
 
-// Load blacklist
 export function loadBlacklist() {
     if (fs.existsSync(BLACKLIST_FILE)) {
         const content = fs.readFileSync(BLACKLIST_FILE, 'utf8');
@@ -31,7 +30,6 @@ export function isBlacklisted(cardId) {
     return blacklistSet.has(String(cardId));
 }
 
-// Rate limiting
 export async function rateLimitedRequest(url, options = {}) {
     const now = Date.now();
     const elapsed = now - lastRequestTime;
@@ -44,9 +42,6 @@ export async function rateLimitedRequest(url, options = {}) {
     return axios.get(url, options);
 }
 
-/**
- * Create axios instance with proper headers
- */
 export function createChubClient(apiKey = '') {
     return axios.create({
         headers: {

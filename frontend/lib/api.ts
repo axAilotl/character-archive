@@ -1,4 +1,4 @@
-import { CardsResponse, Config, ToggleFavoriteResponse, GalleryAsset, CachedAssetsResponse, ChubFollowsResponse } from './types';
+import { CardsResponse, Config, ToggleFavoriteResponse, GalleryAsset, CachedAssetsResponse, ChubFollowsResponse, FederationPlatform, SyncState, ConnectionTestResult, PushResult, BulkPushResult } from './types';
 
 const API_BASE = '';
 
@@ -235,6 +235,82 @@ export async function fetchChubFollows(profile?: string): Promise<ChubFollowsRes
     const message = errorBody?.error || 'Failed to fetch followed creators from Chub';
     throw new Error(message);
   }
+  return res.json();
+}
+
+// ============================================================================
+// Federation API
+// ============================================================================
+
+export async function fetchFederationPlatforms(): Promise<{ platforms: FederationPlatform[] }> {
+  const res = await fetch(`${API_BASE}/api/federation/platforms`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch federation platforms');
+  return res.json();
+}
+
+export async function updateFederationPlatform(
+  platform: string,
+  config: { base_url?: string; api_key?: string; enabled?: boolean }
+): Promise<{ success: boolean; platform: FederationPlatform }> {
+  const res = await fetch(`${API_BASE}/api/federation/platforms/${platform}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) throw new Error('Failed to update platform configuration');
+  return res.json();
+}
+
+export async function testPlatformConnection(platform: string): Promise<ConnectionTestResult> {
+  const res = await fetch(`${API_BASE}/api/federation/platforms/${platform}/test`, {
+    method: 'POST',
+  });
+  return res.json();
+}
+
+export async function fetchCardSyncState(cardId: string): Promise<{ cardId: string; syncStates: SyncState[] }> {
+  const res = await fetch(`${API_BASE}/api/federation/cards/${cardId}/sync`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch sync state');
+  return res.json();
+}
+
+export async function pushCardToPlatform(
+  cardId: string,
+  platform: string,
+  overwrite: boolean = false
+): Promise<PushResult> {
+  const res = await fetch(`${API_BASE}/api/federation/cards/${cardId}/push/${platform}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ overwrite }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Push failed' }));
+    throw new Error(error.error || 'Push failed');
+  }
+  return res.json();
+}
+
+export async function bulkPushToPlatform(
+  cardIds: string[],
+  platform: string,
+  overwrite: boolean = false
+): Promise<BulkPushResult> {
+  const res = await fetch(`${API_BASE}/api/federation/bulk-push/${platform}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cardIds, overwrite }),
+  });
+  if (!res.ok) throw new Error('Bulk push failed');
+  return res.json();
+}
+
+export async function clearCardSync(cardId: string, platform?: string): Promise<{ success: boolean }> {
+  const url = platform
+    ? `${API_BASE}/api/federation/cards/${cardId}/sync/${platform}`
+    : `${API_BASE}/api/federation/cards/${cardId}/sync`;
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to clear sync state');
   return res.json();
 }
 

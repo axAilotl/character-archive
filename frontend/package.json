@@ -6,7 +6,8 @@
     "dev": "next dev -H 0.0.0.0 -p 3177",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3177",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:url": "npm_config_cache=./.npm-cache tsx app/utils/urlCard.test.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
@@ -29,6 +30,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
+    "tsx": "^4.19.2",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5"

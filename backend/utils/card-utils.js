@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
+import { parseCard } from '@character-foundry/loader';
 
 const log = logger.scoped('CARD-UTIL');
 
@@ -24,31 +25,19 @@ export function readCardPngSpec(cardId) {
     if (!fs.existsSync(pngPath)) {
         return null;
     }
-    const pngData = fs.readFileSync(pngPath);
-    let offset = 8;
-    while (offset < pngData.length) {
-        const length = pngData.readUInt32BE(offset);
-        const chunkType = pngData.toString('ascii', offset + 4, offset + 8);
-        const chunkData = pngData.slice(offset + 8, offset + 8 + length);
-        if (chunkType === 'tEXt') {
-            const nullIndex = chunkData.indexOf(0);
-            if (nullIndex > 0) {
-                const keyword = chunkData.toString('latin1', 0, nullIndex);
-                if (keyword.toLowerCase() === 'chara') {
-                    const text = chunkData.slice(nullIndex + 1);
-                    const decoded = Buffer.from(text.toString(), 'base64').toString('utf8');
-                    try {
-                        return JSON.parse(decoded);
-                    } catch (error) {
-                        log.warn('Failed to parse embedded PNG spec', error);
-                        return null;
-                    }
-                }
-            }
+    
+    try {
+        const buffer = fs.readFileSync(pngPath);
+        // Using strict: false (or default) to be lenient with existing cards
+        const result = parseCard(buffer, path.basename(pngPath));
+        if (result && result.card) {
+            return result.card;
         }
-        offset += 12 + length;
+        return null;
+    } catch (error) {
+        log.warn(`Failed to parse card ${cardId}`, error);
+        return null;
     }
-    return null;
 }
 
 export function hasEmbeddedImages(text) {

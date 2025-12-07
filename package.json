@@ -29,6 +29,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@character-foundry/federation": "latest",
+    "@character-foundry/core": "latest",
+    "@character-foundry/schemas": "latest",
+    "@character-foundry/loader": "latest",
+    "@character-foundry/exporter": "latest",
     "axios": "^1.6.5",
     "better-sqlite3": "^12.4.1",
     "commander": "^11.1.0",

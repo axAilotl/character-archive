@@ -10,6 +10,7 @@ import {
   Heart,
   Image as ImageIcon,
   Images,
+  PenTool,
   PlugZap,
   Send,
   Sparkles,
@@ -113,6 +114,15 @@ export function CardItem({
             >
               <PlugZap className="h-3 w-3 text-white" />
               ST
+            </span>
+          )}
+          {card.syncedToArchitect && (
+            <span
+              className="flex items-center gap-1 rounded-full bg-violet-500/80 px-3 py-1 backdrop-blur"
+              title="Synced to Character Architect"
+            >
+              <PenTool className="h-3 w-3 text-white" />
+              CA
             </span>
           )}
         </div>

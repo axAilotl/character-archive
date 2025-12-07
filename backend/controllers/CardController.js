@@ -1,5 +1,6 @@
 import { appConfig } from '../services/ConfigState.js';
 import { sillyTavernService } from '../services/SillyTavernService.js';
+import { federationService, getRemoteCardNames } from '../services/FederationService.js';
 import { logger } from '../utils/logger.js';
 
 const log = logger.scoped('CARD');
@@ -20,7 +21,7 @@ import {
     searchMeilisearchCards,
     searchVectorCards
 } from '../services/search-index.js';
-import NodeCache from 'node-cache';
+import { cacheService } from '../services/CacheService.js';
 import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
@@ -35,18 +36,11 @@ import {
 import { syncFavoriteToChub } from '../services/SyncService.js';
 import { clearCardAssets, cacheGalleryAssets, getGalleryAssets, rewriteCardUrls } from '../services/asset-cache.js';
 
-// Cache specifically for the controller (or shared if we move it to a service)
-const queryCache = new NodeCache({
-    stdTTL: 300,  // 5 minutes
-    maxKeys: 100,  // Limit memory usage
-    useClones: false
-});
-
 // Helper to send cached response (duplicated from server.js for now, should be shared util)
 function sendCachedResponse(res, data, cacheKey, startTime, page) {
     const duration = Date.now() - startTime;
     if (page > 1 && cacheKey) {
-        queryCache.set(cacheKey, data);
+        cacheService.set(cacheKey, data);
     }
     res.set('X-Cache', 'MISS');
     res.set('X-Response-Time', `${duration}ms`);
@@ -58,8 +52,7 @@ const STATIC_DIR = path.join(process.cwd(), 'static');
 
 // Local cache invalidation helper (since we moved queryCache into this file/class)
 const invalidateQueryCache = () => {
-    queryCache.flushAll();
-    console.log('[CACHE] Query cache cleared');
+    cacheService.flush();
 };
 
 
@@ -436,6 +429,26 @@ class CardController {
         try {
             const cardId = req.params.cardId;
             const cardIdStr = String(cardId);
+            const overwrite = req.body?.overwrite || false;
+
+            // Try federation first if configured
+            const stPlatform = federationService.getPlatformConfig('sillytavern');
+            if (stPlatform?.enabled && stPlatform?.base_url) {
+                try {
+                    const result = await federationService.pushToSillyTavern(cardId, overwrite);
+                    return res.json({
+                        success: true,
+                        method: 'federation',
+                        filename: result.filename,
+                        message: `Pushed via CForge plugin to ${stPlatform.base_url}`
+                    });
+                } catch (fedError) {
+                    log.warn('Federation push failed, falling back to legacy method:', fedError.message);
+                    // Fall through to legacy method
+                }
+            }
+
+            // Legacy method (direct SillyTavern API)
             const { pngPath } = getCardFilePaths(cardIdStr);
 
             if (!fs.existsSync(pngPath)) {
@@ -444,7 +457,7 @@ class CardController {
 
             const sillyConfig = appConfig.sillyTavern;
             if (!sillyConfig || !sillyConfig.enabled || !sillyConfig.baseUrl) {
-                return res.status(400).json({ success: false, error: 'Silly Tavern integration not configured' });
+                return res.status(400).json({ success: false, error: 'SillyTavern integration not configured. Enable federation or configure legacy sillyTavern settings.' });
             }
 
             const baseUrl = sillyConfig.baseUrl.replace(/\/$/, '');
@@ -457,7 +470,7 @@ class CardController {
             // Get CSRF
             const csrfUrl = `${baseUrl}/csrf-token`;
             console.log(`[INFO] Fetching SillyTavern CSRF from: ${csrfUrl}`);
-            
+
             const csrfResponse = await axios.get(csrfUrl, {
                 headers: csrfHeaders,
                 timeout: 15000,
@@ -542,7 +555,7 @@ class CardController {
                         validateStatus: () => true
                     });
                 } catch (e) { /* ignore */ }
-                
+
                 // Refresh local cache
                 try {
                     await sillyTavernService.fetchLoadedIds({ forceRefresh: true, cookieHeader });
@@ -550,6 +563,7 @@ class CardController {
 
                 return res.json({
                     success: true,
+                    method: 'legacy',
                     status: importResponse.status,
                     imported: importResponse.data,
                     fileName: importResponse.data?.file_name || `${cardIdStr}.png`
@@ -572,17 +586,35 @@ class CardController {
         try {
             const cardId = req.params.cardId;
             const cardIdStr = String(cardId);
-            
+
+            // Try federation first if configured
+            const architectPlatform = federationService.getPlatformConfig('architect');
+            if (architectPlatform?.enabled && architectPlatform?.base_url) {
+                try {
+                    const result = await federationService.pushToArchitect(cardId);
+                    return res.json({
+                        success: true,
+                        method: 'federation',
+                        remoteId: result.remoteId,
+                        message: `Pushed via federation to ${architectPlatform.base_url}`
+                    });
+                } catch (fedError) {
+                    log.warn('Federation push to Architect failed, falling back to legacy method:', fedError.message);
+                    // Fall through to legacy method
+                }
+            }
+
+            // Legacy method (URL-based import)
             const architectUrl = appConfig.characterArchitect?.url || 'http://localhost:3456';
             const { pngPath } = getCardFilePaths(cardIdStr);
-            
+
             if (!fs.existsSync(pngPath)) {
                 return res.status(404).json({ success: false, error: 'Card PNG file not found' });
             }
-            
+
             const baseUrl = `${req.protocol}://${req.get('host')}`;
             const publicUrl = `${baseUrl}/static/${cardIdStr.substring(0, 2)}/${cardIdStr}.png`;
-            
+
             const response = await axios.post(
                 `${architectUrl}/api/import-url`,
                 { url: publicUrl },
@@ -591,16 +623,18 @@ class CardController {
                     timeout: 30000
                 }
             );
-            
+
             if (response.status === 201) {
                 res.json({
                     success: true,
+                    method: 'legacy',
                     message: 'Card pushed successfully',
                     architectResponse: response.data
                 });
             } else {
                 res.json({
                     success: true,
+                    method: 'legacy',
                     message: 'Card pushed with non-standard response',
                     architectResponse: response.data
                 });
@@ -658,7 +692,7 @@ class CardController {
             }) : null;
 
             if (cacheKey) {
-                const cached = queryCache.get(cacheKey);
+                const cached = cacheService.get(cacheKey);
                 if (cached) {
                     res.set('X-Cache', 'HIT');
                     res.set('X-Response-Time', '0ms');
@@ -668,7 +702,15 @@ class CardController {
 
             const startTime = Date.now();
             let sillyLoadedSet = null;
+            let architectSyncedSet = null;
             let allowedIds = null;
+
+            // Fetch architect card names via federation
+            try {
+                architectSyncedSet = await getRemoteCardNames('architect');
+            } catch (error) {
+                log.warn('Failed to fetch architect cards', error);
+            }
 
             if (inSillyTavern || withSillyStatus) {
                 if (!appConfig?.sillyTavern?.enabled || !appConfig?.sillyTavern?.baseUrl) {
@@ -701,6 +743,7 @@ class CardController {
             const decorateCards = (cardsToDecorate) => {
                 const baseUrl = `${req.protocol}://${req.get('host')}`;
                 const sillySet = sillyLoadedSet instanceof Set ? sillyLoadedSet : null;
+                const architectSet = architectSyncedSet instanceof Set ? architectSyncedSet : null;
                 cardsToDecorate.forEach(card => {
                     const imagePath = card.imagePath && card.imagePath.startsWith('/')
                         ? card.imagePath
@@ -708,6 +751,8 @@ class CardController {
                     card.imagePath = imagePath;
                     card.silly_link = `${baseUrl}${imagePath}`;
                     card.loadedInSillyTavern = sillySet ? sillySet.has(String(card.id)) : false;
+                    // Match by name (lowercased) for architect
+                    card.syncedToArchitect = architectSet ? architectSet.has((card.name || '').toLowerCase()) : false;
                 });
             };
 

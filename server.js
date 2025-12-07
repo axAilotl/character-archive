@@ -15,6 +15,7 @@ import cardRouter from './backend/routes/cards.js';
 import syncRouter from './backend/routes/sync.js';
 import adminRouter from './backend/routes/admin.js';
 import tagRouter from './backend/routes/tags.js';
+import federationRouter from './backend/routes/federation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,51 @@ app.use(compression());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Security: IP and Domain Whitelist
+const ALLOWED_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+const ALLOWED_DOMAINS = [/\.local\.vega\.nyc$/, /^localhost$/, /^127\.0\.0\.1$/];
+
+app.use((req, res, next) => {
+    // 1. IP Whitelist
+    if (!ALLOWED_IPS.includes(req.ip)) {
+        console.warn(`[SECURITY] Blocked request from unauthorized IP: ${req.ip}`);
+        return res.status(403).send('Forbidden IP');
+    }
+    next();
+});
+
+// CORS for federation
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    let allowed = false;
+    
+    if (!origin) {
+        // Non-browser requests or same-origin
+        allowed = true;
+    } else {
+        try {
+            const hostname = new URL(origin).hostname;
+            if (ALLOWED_DOMAINS.some(pattern => pattern.test(hostname))) {
+                allowed = true;
+                res.header('Access-Control-Allow-Origin', origin);
+                res.header('Access-Control-Allow-Credentials', 'true');
+            }
+        } catch (e) {
+            // Invalid origin
+        }
+    }
+
+    if (allowed) {
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(allowed ? 200 : 403);
+    }
+    next();
+});
 
 // Rate limiting middleware
 // General API rate limiter - protects against abuse and accidental loops
@@ -129,6 +175,7 @@ app.post('/set_config', (req, res) => res.redirect(307, '/api/config'));
 app.get('/api/chub/follows', (req, res) => res.redirect(307, '/api/sync/chub/follows'));
 
 app.use('/api/tags', tagRouter);
+app.use('/api/federation', federationRouter);
 
 app.get('/reroll-tags', (req, res) => res.redirect(307, '/api/tags/random'));
 app.get('/api/tag-aliases', (req, res) => res.redirect(307, '/api/tags/aliases'));
