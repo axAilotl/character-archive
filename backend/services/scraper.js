@@ -16,6 +16,7 @@ import {
     loadBlacklist, 
     isBlacklisted 
 } from './ApiClient.js';
+import { syncRisuAi } from './RisuAiService.js';
 import { syncLinkedLorebooks } from './LorebookService.js';
 
 const scraperLogger = logger.scoped('SCRAPER');
@@ -1317,6 +1318,10 @@ export async function syncCards(config, progressCallback = null) {
                 }
             }
         }
+    }
+
+    if (config.risuAiSync?.enabled) {
+        await syncRisuAi(config);
     }
 
     updateProgress('');
