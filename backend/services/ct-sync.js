@@ -229,7 +229,7 @@ async function insertCard(db, payload) {
   return result.lastInsertRowid;
 }
 
-async function fetchCtPage({ bearerToken, hitsPerPage, page, minTokens, maxTokens, excludedWarnings }) {
+async function fetchCtPage({ bearerToken, hitsPerPage, page, minTokens, maxTokens, excludedWarnings, cookies = [] }) {
   const filters = [`totalTokens >= ${minTokens}`, `totalTokens <= ${maxTokens}`];
   if (excludedWarnings && excludedWarnings.length > 0) {
     const warnings = excludedWarnings.map(w => `\"${w}\"`).join(',');
@@ -249,6 +249,10 @@ async function fetchCtPage({ bearerToken, hitsPerPage, page, minTokens, maxToken
     ...REQUEST_HEADERS,
     authorization: `Bearer ${bearerToken}`,
   };
+
+  if (cookies && cookies.length > 0) {
+    headers.Cookie = cookies.join('; ');
+  }
 
   // Log request details for debugging (masking sensitive info)
   const maskedHeaders = { ...headers };
@@ -326,6 +330,7 @@ export async function syncCharacterTavern(appConfig = {}, progressCallback = nul
         minTokens,
         maxTokens,
         excludedWarnings,
+        cookies,
       });
     } catch (error) {
       if (error?.response?.status === 403) {

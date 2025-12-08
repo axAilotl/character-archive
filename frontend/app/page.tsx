@@ -374,7 +374,10 @@ function HomeContent() {
         onGoToLastPage={handleGoToLastPage}
         onRefresh={() => loadCards()}
         onSaveSearch={() => handleSaveSearch(filters, includeTagsSelected, excludeTagsSelected)}
-        onSync={async () => { await startSyncing(); await startCtSyncing(); }}
+        onSync={async () => {
+          if (config?.syncFollowedCreators) await startSyncing();
+          if (config?.ctSync?.enabled) await startCtSyncing();
+        }}
         onOpenFederation={() => setShowFederation(true)}
         onOpenSettings={() => setShowSettings(true)}
         onToggleDarkMode={() => setDarkMode(prev => !prev)}

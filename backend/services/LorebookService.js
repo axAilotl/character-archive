@@ -35,19 +35,18 @@ export async function downloadLorebook(lorebookId, client) {
     }
 
     try {
-        const response = await rateLimitedRequest(`https://gateway.chub.ai/api/lorebooks/${id}`, {
+        const response = await rateLimitedRequest(`https://gateway.chub.ai/api/v4/projects/${id}/repository/files/raw%252Fsillytavern_raw.json/raw?ref=main&response_type=blob`, {
             headers: client.defaults.headers
         });
 
-        const data = response.data;
-        const definition = data?.definition;
+        const definition = response.data;
 
         if (!definition) {
-            throw new Error('No definition found in lorebook response');
+            throw new Error('Empty response from lorebook endpoint');
         }
 
         await fsp.writeFile(outputPath, JSON.stringify(definition, null, 4));
-        log.info(`Downloaded lorebook ${id}: ${data.name || 'Unknown'}`);
+        log.info(`Downloaded lorebook ${id}`);
         return true;
     } catch (error) {
         log.warn(`Failed to download lorebook ${id}`, error.message);

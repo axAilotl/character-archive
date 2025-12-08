@@ -1259,14 +1259,18 @@ export async function syncCards(config, progressCallback = null) {
                     const params = {
                         first: syncLimit,
                         page,
-                        sort: 'last_activity_at',
+                        sort: 'created_at',
                         asc: 'false',
                         nsfw: 'true',
                         nsfl: 'true',
-                        min_tokens: config.min_tokens || 50
+                        min_tokens: config.min_tokens || 50,
+                        username: username,
+                        namespace: 'characters',
+                        include_forks: 'true',
+                        exclude_mine: 'false'
                     };
 
-                    const response = await client.get(`https://gateway.chub.ai/api/profile/${username}/projects`, { params });
+                    const response = await client.get('https://gateway.chub.ai/search', { params });
                     const cards = response.data?.data?.nodes || [];
 
                     if (cards.length === 0) {
