@@ -1137,14 +1137,17 @@ export async function syncCards(config, progressCallback = null) {
 
                     try {
                         const ratingsUrl = `https://gateway.chub.ai/api/project/${card.id}/ratings`;
-                        const ratingsResp = await rateLimitedRequest(ratingsUrl, { headers: client.defaults.headers });
+                        const ratingsResp = await rateLimitedRequest(ratingsUrl, { 
+                            headers: client.defaults.headers,
+                            timeout: 10000 
+                        });
 
                         card.ratingsEnabled = ratingsResp.data.enabled !== false;
                         if (ratingsResp.data.ratings_map) {
                             card.ratings = JSON.stringify(ratingsResp.data.ratings_map);
                         }
                     } catch (error) {
-                        scraperLogger.warn(`Failed to fetch ratings for ${card.id}`, error);
+                        scraperLogger.warn(`Failed to fetch ratings for ${card.id}: ${error.message}`);
                     }
 
                     if (await downloadCard(card, config)) {
