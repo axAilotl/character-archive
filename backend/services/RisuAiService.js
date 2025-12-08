@@ -100,72 +100,75 @@ async function processRisuCard(cardUrl) {
             fs.mkdirSync(cardDir, { recursive: true });
         }
 
-        // Determine download URL and Extension
-        let downloadUrl;
-        let extension;
+        // Determine download URL (Dynamic endpoint handles both CharX and PNG)
+        const downloadUrl = `${BASE_URL}/api/v1/download/dynamic/${id}?cors=true`;
         
-        if (isCharX) {
-            downloadUrl = `${BASE_URL}/api/v1/download/charx-v3/${id}`;
-            extension = 'charx';
-        } else {
-            // Defaulting to the json-v3 endpoint which returns the full card data
-            // If there is a separate "PNG" endpoint for non-charx, it would be here.
-            downloadUrl = `${BASE_URL}/api/v1/download/json-v3/${id}`;
-            extension = 'json';
-        }
+        try {
+            const dlResponse = await axios.get(downloadUrl, { 
+                responseType: 'arraybuffer',
+                validateStatus: status => status === 200 
+            });
 
-        // Download the Main File (The "Big One")
-        const mainFilePath = path.join(cardDir, `${id}.${extension}`);
-        const dlResult = await downloadFile(downloadUrl, mainFilePath);
-        
-        if (!dlResult) {
-            log.error(`Failed to download main file for ${id}`);
-            return false;
-        }
+            const contentType = dlResponse.headers['content-type'];
+            let extension = 'bin';
 
-        // Download Avatar/Thumbnail
-        if (card.img) {
-            const imgUrl = `https://sv.risuai.xyz/resource/${card.img}`;
-            await downloadFile(imgUrl, path.join(cardDir, 'avatar.png'));
-        }
+            if (contentType.includes('application/charx')) {
+                extension = 'charx';
+            } else if (contentType.includes('image/png')) {
+                extension = 'png';
+            }
 
-        // Save Metadata
-        const metadataPath = path.join(cardDir, 'metadata.json');
-        await fsp.writeFile(metadataPath, JSON.stringify(card, null, 2));
-
-        // Insert into Database (Simplified for now)
-        const db = getDatabase();
-        // Check if exists
-        const existing = db.prepare('SELECT id FROM cards WHERE source = ? AND sourceId = ?').get('risuai', id);
-        
-        if (!existing) {
-             const insertSql = `
-                INSERT INTO cards (
-                    name, description, author, source, sourceId, sourceUrl, 
-                    fullPath, hasLorebook, hasEmbeddedLorebook, downloadCount,
-                    createdAt, lastModified
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
+            // Download the Main File (The "Big One")
+            const mainFilePath = path.join(cardDir, `${id}.${extension}`);
+            await fsp.writeFile(mainFilePath, dlResponse.data);
             
-            db.prepare(insertSql).run(
-                card.name,
-                card.desc || '',
-                card.authorname || 'Anonymous',
-                'risuai',
-                id,
-                fullUrl,
-                path.relative(STATIC_DIR, mainFilePath), // Relative path to the main file
-                card.hasLore ? 1 : 0,
-                0, // parsing required to determine if embedded
-                Number(card.download) || 0,
-                new Date(Number(card.date)).toISOString(),
-                new Date().toISOString()
-            );
-            log.info(`Imported RisuAI card: ${card.name} (${id})`);
-            return true;
-        } else {
-            // Update existing if needed
-            return false;
+            // Download Avatar/Thumbnail
+            if (card.img) {
+                const imgUrl = `https://sv.risuai.xyz/resource/${card.img}`;
+                await downloadFile(imgUrl, path.join(cardDir, 'avatar.png'));
+            }
+
+            // Save Metadata
+            const metadataPath = path.join(cardDir, 'metadata.json');
+            await fsp.writeFile(metadataPath, JSON.stringify(card, null, 2));
+
+            // Insert into Database (Simplified for now)
+            const db = getDatabase();
+            // Check if exists
+            const existing = db.prepare('SELECT id FROM cards WHERE source = ? AND sourceId = ?').get('risuai', id);
+            
+            if (!existing) {
+                 const insertSql = `
+                    INSERT INTO cards (
+                        name, description, author, source, sourceId, sourceUrl, 
+                        fullPath, hasLorebook, hasEmbeddedLorebook, downloadCount,
+                        createdAt, lastModified
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `;
+                
+                db.prepare(insertSql).run(
+                    card.name,
+                    card.desc || '',
+                    card.authorname || 'Anonymous',
+                    'risuai',
+                    id,
+                    fullUrl,
+                    path.relative(STATIC_DIR, mainFilePath), // Relative path to the main file
+                    card.hasLore ? 1 : 0,
+                    0, // parsing required to determine if embedded
+                    Number(card.download) || 0,
+                    new Date(Number(card.date)).toISOString(),
+                    new Date().toISOString()
+                );
+                log.info(`Imported RisuAI card: ${card.name} (${id}) [${extension}]`);
+                return true;
+            } else {
+                // Update existing if needed
+                return false;
+            }
+        } catch (dlError) {
+             log.error(`Failed to download main file for ${id} from dynamic endpoint`, dlError.message);
+             return false;
         }
 
     } catch (error) {
