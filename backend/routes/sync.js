@@ -19,6 +19,8 @@ const syncLimiter = rateLimit({
 router.get('/', syncLimiter, syncController.syncCards);
 router.get('/cards', syncLimiter, syncController.syncCards);
 router.get('/ct', syncLimiter, syncController.syncCharacterTavern);
+router.get('/wyvern', syncLimiter, syncController.syncWyvern);
+router.get('/risuai', syncLimiter, syncController.syncRisuAi);
 router.post('/favorites', syncController.syncFavoritesToChub);
 router.get('/chub/follows', syncController.getChubFollows);
 

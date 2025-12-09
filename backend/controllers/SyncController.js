@@ -1,5 +1,7 @@
 import { syncCards } from '../services/scraper.js';
 import { syncCharacterTavern } from '../services/scrapers/CtScraper.js';
+import { syncWyvern } from '../services/scrapers/WyvernScraper.js';
+import { syncRisuAi } from '../services/scrapers/RisuAiScraper.js';
 import { fetchChubFollows } from '../services/SyncService.js';
 import { lockService } from '../services/LockService.js';
 import { getDatabase } from '../database.js';
@@ -103,6 +105,78 @@ class SyncController {
             res.end();
         } finally {
             lockService.setCtSyncInProgress(false);
+        }
+    }
+
+    async syncWyvern(req, res) {
+        if (lockService.isSyncInProgress()) {
+            return res.status(409).json({ error: 'Sync already in progress' });
+        }
+
+        if (!appConfig?.wyvernSync?.enabled) {
+            return res.status(400).json({ error: 'Wyvern sync is disabled in config' });
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        lockService.setSyncInProgress(true);
+
+        try {
+            const result = await syncWyvern(appConfig, progress => {
+                res.write(`data: ${JSON.stringify(progress)}\n\n`);
+            });
+
+            res.write(`data: ${JSON.stringify({
+                progress: 100,
+                currentCard: 'Wyvern Sync Complete',
+                newCards: result.added || result.newCards || 0,
+            })}\n\n`);
+            await drainSearchIndexQueue('wyvern-sync');
+            res.end();
+        } catch (error) {
+            log.error('Wyvern Sync error', error);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        } finally {
+            lockService.setSyncInProgress(false);
+        }
+    }
+
+    async syncRisuAi(req, res) {
+        if (lockService.isSyncInProgress()) {
+            return res.status(409).json({ error: 'Sync already in progress' });
+        }
+
+        if (!appConfig?.risuSync?.enabled) {
+            return res.status(400).json({ error: 'RisuAI sync is disabled in config' });
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        lockService.setSyncInProgress(true);
+
+        try {
+            const result = await syncRisuAi(appConfig, progress => {
+                res.write(`data: ${JSON.stringify(progress)}\n\n`);
+            });
+
+            res.write(`data: ${JSON.stringify({
+                progress: 100,
+                currentCard: 'RisuAI Sync Complete',
+                newCards: result.added || result.newCards || 0,
+            })}\n\n`);
+            await drainSearchIndexQueue('risuai-sync');
+            res.end();
+        } catch (error) {
+            log.error('RisuAI Sync error', error);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        } finally {
+            lockService.setSyncInProgress(false);
         }
     }
 
