@@ -17,6 +17,7 @@ import {
     isBlacklisted 
 } from './ApiClient.js';
 import { syncRisuAi } from './RisuAiService.js';
+import { syncWyvern } from './WyvernService.js';
 import { syncLinkedLorebooks } from './LorebookService.js';
 
 const scraperLogger = logger.scoped('SCRAPER');
@@ -1092,7 +1093,15 @@ export async function syncCards(config, progressCallback = null) {
     };
     
     scraperLogger.info(`Starting sync - pages ${startPage} to ${maxPage}, ${syncLimit} cards per page`);
-    
+
+    if (config.risuAiSync?.enabled) {
+        await syncRisuAi(config);
+    }
+
+    if (config.wyvernSync?.enabled) {
+        await syncWyvern(config, progressCallback);
+    }
+
     // Timeline mode
     if (config.use_timeline && !config.followedCreatorsOnly) {
         if (!config.apikey) {
@@ -1168,7 +1177,7 @@ export async function syncCards(config, progressCallback = null) {
         }
     } 
     // Regular search mode
-    else if (!config.followedCreatorsOnly) {
+    else if (!config.followedCreatorsOnly && config.syncTagsMode) {
         const sortBy = config.syncByNew ? 'created_at' : 'last_activity_at';
         const baseParams = {
             search: '',
@@ -1318,10 +1327,6 @@ export async function syncCards(config, progressCallback = null) {
                 }
             }
         }
-    }
-
-    if (config.risuAiSync?.enabled) {
-        await syncRisuAi(config);
     }
 
     updateProgress('');

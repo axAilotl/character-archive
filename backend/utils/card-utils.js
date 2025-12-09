@@ -16,28 +16,72 @@ export function getCardFilePaths(cardId) {
     return {
         subfolder,
         jsonPath: path.join(subfolder, `${cardIdStr}.json`),
-        pngPath: path.join(subfolder, `${cardIdStr}.png`)
+        pngPath: path.join(subfolder, `${cardIdStr}.png`),
+        fullPngPath: path.join(subfolder, `${cardIdStr}.card.png`), // RisuAI full PNG with assets
+        charxPath: path.join(subfolder, `${cardIdStr}.charx`)
     };
 }
 
 export function readCardPngSpec(cardId) {
-    const { pngPath } = getCardFilePaths(cardId);
-    if (!fs.existsSync(pngPath)) {
-        return null;
-    }
-    
-    try {
-        const buffer = fs.readFileSync(pngPath);
-        // Using strict: false (or default) to be lenient with existing cards
-        const result = parseCard(buffer, path.basename(pngPath));
-        if (result && result.card) {
-            return result.card;
+    const { pngPath, fullPngPath, charxPath, jsonPath } = getCardFilePaths(cardId);
+
+    // Try full PNG first (RisuAI cards with embedded assets)
+    if (fs.existsSync(fullPngPath)) {
+        try {
+            const buffer = fs.readFileSync(fullPngPath);
+            const result = parseCard(buffer, path.basename(fullPngPath));
+            if (result && result.card) {
+                return result.card;
+            }
+        } catch (error) {
+            log.debug(`Full PNG parse failed for ${cardId}, trying alternatives`);
         }
-        return null;
-    } catch (error) {
-        log.warn(`Failed to parse card ${cardId}`, error);
-        return null;
     }
+
+    // Try regular PNG (Chub cards, or fallback)
+    if (fs.existsSync(pngPath)) {
+        try {
+            const buffer = fs.readFileSync(pngPath);
+            const result = parseCard(buffer, path.basename(pngPath));
+            if (result && result.card) {
+                return result.card;
+            }
+        } catch (error) {
+            // PNG parse failed (might be JPEG thumbnail), try other formats
+            log.debug(`PNG parse failed for ${cardId}, trying alternatives`);
+        }
+    }
+
+    // Try CharX (RisuAI cards)
+    if (fs.existsSync(charxPath)) {
+        try {
+            const buffer = fs.readFileSync(charxPath);
+            const result = parseCard(buffer, path.basename(charxPath));
+            if (result && result.card) {
+                return result.card;
+            }
+        } catch (error) {
+            log.debug(`CharX parse failed for ${cardId}`);
+        }
+    }
+
+    // Fall back to sidecar JSON (RisuAI cards with JPEG thumbnails)
+    if (fs.existsSync(jsonPath)) {
+        try {
+            const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+            // If JSON has definition field, return it as card spec
+            if (jsonData.definition) {
+                return jsonData.definition;
+            }
+            // Otherwise return the whole JSON as a card-like object
+            return jsonData;
+        } catch (error) {
+            log.debug(`JSON parse failed for ${cardId}`);
+        }
+    }
+
+    log.warn(`Failed to parse card ${cardId} - no valid format found`);
+    return null;
 }
 
 export function hasEmbeddedImages(text) {

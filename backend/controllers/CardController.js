@@ -28,6 +28,7 @@ import FormData from 'form-data';
 import axios from 'axios';
 import { readCardPngSpec, getCardFilePaths, deriveFeatureFlagsFromSpec } from '../utils/card-utils.js';
 import { refreshCard } from '../services/scraper.js';
+import { refreshRisuCard } from '../services/RisuAiService.js';
 import {
     setCardGalleryFlag,
     setCardFavoriteFlag,
@@ -162,16 +163,23 @@ class CardController {
     refreshCard = async (req, res) => {
         try {
             const cardId = req.params.cardId;
-            
+
             // Check card source
             const db = getDatabase();
             const card = db.prepare('SELECT source FROM cards WHERE id = ?').get(cardId);
-            
+
             if (card && card.source === 'ct') {
                 return res.status(400).json({ error: 'Refreshing Character Tavern cards is not currently supported.' });
             }
 
-            await refreshCard(cardId, appConfig);
+            if (card && card.source === 'risuai') {
+                // Use RisuAI refresh
+                await refreshRisuCard(cardId, appConfig);
+            } else {
+                // Use Chub refresh
+                await refreshCard(cardId, appConfig);
+            }
+
             const galleryResult = await refreshGalleryIfNeeded(parseInt(cardId, 10));
 
             // Invalidate cache since card was refreshed
@@ -391,9 +399,13 @@ class CardController {
         try {
             const cardId = req.params.cardId;
             const format = req.query.format || 'png';
-            const { jsonPath, pngPath } = getCardFilePaths(cardId);
+            const { jsonPath, pngPath, charxPath } = getCardFilePaths(cardId);
 
-            if (!fs.existsSync(pngPath)) {
+            // Check which files exist
+            const hasCharx = fs.existsSync(charxPath);
+            const hasPng = fs.existsSync(pngPath);
+
+            if (!hasPng && !hasCharx) {
                 return res.status(404).json({ error: 'Card not found' });
             }
 
@@ -402,6 +414,9 @@ class CardController {
                     return res.status(404).json({ error: 'Metadata not found' });
                 }
                 res.download(jsonPath, `${cardId}.json`);
+            } else if (format === 'charx' && hasCharx) {
+                // Direct CharX download
+                res.download(charxPath, `${cardId}.charx`);
             } else {
                 // Use useLocal=true default
                 const useLocal = req.query.useLocal !== 'false';
@@ -409,13 +424,6 @@ class CardController {
                 if (result.success) {
                     res.json(result);
                 } else {
-                    // Fallback to plain download if rewrite fails or not requested via API standard?
-                    // Actually server.js endpoint was:
-                    // const result = await rewriteCardUrls(cardId, useLocal);
-                    // res.json(result); 
-                    // It returned JSON with base64/url, not a file download stream directly unless client requested it.
-                    // But my code above said res.download.
-                    // Let's stick to server.js behavior: rewrite URLs and return JSON.
                     res.json(result);
                 }
             }
@@ -666,7 +674,7 @@ class CardController {
             const language = req.query.language ? req.query.language.toString() : null;
             const favoriteFilter = req.query.favorite ? req.query.favorite.toString() : null;
             const sourceParam = req.query.source ? req.query.source.toString() : 'all';
-            const normalizedSource = ['chub', 'ct'].includes(sourceParam) ? sourceParam : 'all';
+            const normalizedSource = ['chub', 'ct', 'risuai'].includes(sourceParam) ? sourceParam : 'all';
             const hasAlternateGreetings = req.query.hasAlternateGreetings === 'true';
             const hasLorebook = req.query.hasLorebook === 'true';
             const hasEmbeddedLorebook = req.query.hasEmbeddedLorebook === 'true';

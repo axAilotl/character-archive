@@ -29,13 +29,15 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@character-foundry/federation": "latest",
     "@character-foundry/core": "latest",
-    "@character-foundry/schemas": "latest",
-    "@character-foundry/loader": "latest",
     "@character-foundry/exporter": "latest",
+    "@character-foundry/federation": "latest",
+    "@character-foundry/loader": "latest",
+    "@character-foundry/schemas": "latest",
+    "adm-zip": "^0.5.16",
     "axios": "^1.6.5",
     "better-sqlite3": "^12.4.1",
+    "cheerio": "^1.1.2",
     "commander": "^11.1.0",
     "compression": "^1.7.4",
     "dotenv": "^16.3.1",
@@ -52,7 +54,8 @@
     "png-chunk-text": "^1.0.0",
     "png-chunks-encode": "^1.0.0",
     "png-chunks-extract": "^1.0.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

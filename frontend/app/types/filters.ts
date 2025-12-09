@@ -5,7 +5,7 @@ export const defaultFilters = {
     tagMatchMode: 'or' as 'and' | 'or',
     sort: 'new',
     favorite: '' as '' | 'fav' | 'not_fav' | 'shadowban' | 'deleted',
-    source: 'all' as 'all' | 'chub' | 'ct',
+    source: 'all' as 'all' | 'chub' | 'ct' | 'risuai' | 'wyvern',
     minTokens: '',
     hasExampleDialogues: false,
     hasAlternateGreetings: false,

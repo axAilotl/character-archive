@@ -367,12 +367,43 @@ export function useCardActions(): UseCardActionsResult {
 
   const handleDownload = useCallback(async (card: Card) => {
     try {
-      const response = await fetch(card.imagePath);
+      let downloadUrl = card.imagePath;
+      let filename = getDownloadFilename(card);
+
+      if (card.source === "risuai") {
+        // RisuAI cards: try CharX first, then full PNG (.card.png), then regular PNG
+        const prefix = card.id.substring(0, 2);
+        const charxUrl = `/static/${prefix}/${card.id}.charx`;
+        const fullPngUrl = `/static/${prefix}/${card.id}.card.png`;
+        const pngUrl = `/static/${prefix}/${card.id}.png`;
+
+        // Check which format exists (in priority order)
+        try {
+          const charxCheck = await fetch(charxUrl, { method: 'HEAD' });
+          if (charxCheck.ok) {
+            downloadUrl = charxUrl;
+            filename = filename.replace(/\.png$/, '.charx');
+          } else {
+            // Try full PNG with embedded assets
+            const fullPngCheck = await fetch(fullPngUrl, { method: 'HEAD' });
+            if (fullPngCheck.ok) {
+              downloadUrl = fullPngUrl;
+              // filename stays as .png
+            } else {
+              downloadUrl = pngUrl;
+            }
+          }
+        } catch {
+          downloadUrl = pngUrl;
+        }
+      }
+
+      const response = await fetch(downloadUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = getDownloadFilename(card);
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -456,6 +487,9 @@ export function useCardActions(): UseCardActionsResult {
 
   const getChubUrl = useCallback((card: Card) => {
     if (card.source === "ct" && card.sourceUrl) {
+      return card.sourceUrl;
+    }
+    if (card.source === "risuai" && card.sourceUrl) {
       return card.sourceUrl;
     }
     if (card.fullPath) {

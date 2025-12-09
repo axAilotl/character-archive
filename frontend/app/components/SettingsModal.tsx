@@ -2,7 +2,7 @@
 
 import { Fragment, type RefObject, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { X, Loader2, Save, Download, Settings, RefreshCw, Database, Search, User, Globe } from 'lucide-react';
+import { X, Loader2, Save, Download, Settings, RefreshCw, Database, Search, User, Globe, FileJson } from 'lucide-react';
 import clsx from 'clsx';
 import type { Config } from '@/lib/types';
 
@@ -56,9 +56,16 @@ type SettingsModalProps = {
         chunkWeight: number;
         rrfK: number;
     };
+    defaultWyvernSyncState: {
+        enabled: boolean;
+        pageLimit: number;
+        itemsPerPage: number;
+        rating: string;
+        bearerToken: string;
+    };
 };
 
-type TabId = 'sync-control' | 'general' | 'silly' | 'ct' | 'chub' | 'vector';
+type TabId = 'sync-control' | 'general' | 'silly' | 'ct' | 'chub' | 'vector' | 'risuai' | 'wyvern';
 
 export const SettingsModal = ({
     showSettings,
@@ -75,6 +82,7 @@ export const SettingsModal = ({
     defaultSillyTavernState,
     defaultCtSyncState,
     defaultVectorSearchState,
+    defaultWyvernSyncState,
 }: SettingsModalProps) => {
     const [activeTab, setActiveTab] = useState<TabId>('sync-control');
 
@@ -84,6 +92,8 @@ export const SettingsModal = ({
         { id: 'silly', label: 'SillyTavern', icon: <Globe className="h-4 w-4" /> },
         { id: 'ct', label: 'Character Tavern', icon: <Database className="h-4 w-4" /> },
         { id: 'chub', label: 'Chub', icon: <User className="h-4 w-4" /> },
+        { id: 'risuai', label: 'RisuAI', icon: <FileJson className="h-4 w-4" /> },
+        { id: 'wyvern', label: 'Wyvern', icon: <Globe className="h-4 w-4" /> },
         { id: 'vector', label: 'Vector Search', icon: <Search className="h-4 w-4" /> },
     ];
 
@@ -192,6 +202,32 @@ export const SettingsModal = ({
                                                 <div className="flex flex-col">
                                                     <span className="font-medium text-slate-700 dark:text-slate-200">Vector Search</span>
                                                     <span className="text-xs text-slate-500 dark:text-slate-400">Semantic & chunk search</span>
+                                                </div>
+                                            </label>
+
+                                            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-indigo-700">
+                                                <input
+                                                    type="checkbox"
+                                                    name="risu_enabled"
+                                                    defaultChecked={config?.risuAiSync?.enabled || false}
+                                                    className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-slate-700 dark:text-slate-200">RisuAI</span>
+                                                    <span className="text-xs text-slate-500 dark:text-slate-400">Scrape realm.risuai.net</span>
+                                                </div>
+                                            </label>
+
+                                            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:border-purple-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-purple-700">
+                                                <input
+                                                    type="checkbox"
+                                                    name="wyvern_enabled"
+                                                    defaultChecked={config?.wyvernSync?.enabled || false}
+                                                    className="h-5 w-5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 dark:border-slate-600"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-slate-700 dark:text-slate-200">Wyvern</span>
+                                                    <span className="text-xs text-slate-500 dark:text-slate-400">Scrape wyvern.chat</span>
                                                 </div>
                                             </label>
 
@@ -643,6 +679,90 @@ export const SettingsModal = ({
                                                 Sync By New (Created Date)
                                             </label>
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Tab: RisuAI */}
+                                <div className={clsx('space-y-6', activeTab !== 'risuai' && 'hidden')}>
+                                    <div className="space-y-3">
+                                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                            RisuAI Configuration
+                                        </h3>
+                                        <div className="grid gap-4 sm:grid-cols-2">
+                                            <label className="flex flex-col gap-2 text-sm">
+                                                <span className="font-medium text-slate-700 dark:text-slate-300">Page Limit</span>
+                                                <input
+                                                    type="number"
+                                                    name="risu_pageLimit"
+                                                    min="1"
+                                                    defaultValue={config?.risuAiSync?.pageLimit || 5}
+                                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                                />
+                                            </label>
+                                        </div>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                                            Scrapes the latest cards from realm.risuai.net. Downloads V3 JSON, CharX, or embedded PNGs depending on availability.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Tab: Wyvern */}
+                                <div className={clsx('space-y-6', activeTab !== 'wyvern' && 'hidden')}>
+                                    <div className="space-y-3">
+                                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                            Wyvern Configuration
+                                        </h3>
+                                        <div className="grid gap-4 sm:grid-cols-2">
+                                            <label className="flex flex-col gap-2 text-sm">
+                                                <span className="font-medium text-slate-700 dark:text-slate-300">Page Limit</span>
+                                                <input
+                                                    type="number"
+                                                    name="wyvern_pageLimit"
+                                                    min="1"
+                                                    defaultValue={config?.wyvernSync?.pageLimit ?? defaultWyvernSyncState.pageLimit}
+                                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                                />
+                                            </label>
+                                            <label className="flex flex-col gap-2 text-sm">
+                                                <span className="font-medium text-slate-700 dark:text-slate-300">Items per Page</span>
+                                                <input
+                                                    type="number"
+                                                    name="wyvern_itemsPerPage"
+                                                    min="1"
+                                                    max="100"
+                                                    defaultValue={config?.wyvernSync?.itemsPerPage ?? defaultWyvernSyncState.itemsPerPage}
+                                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                                />
+                                            </label>
+                                            <label className="flex flex-col gap-2 text-sm">
+                                                <span className="font-medium text-slate-700 dark:text-slate-300">Rating Filter</span>
+                                                <select
+                                                    name="wyvern_rating"
+                                                    defaultValue={config?.wyvernSync?.rating ?? defaultWyvernSyncState.rating}
+                                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                                >
+                                                    <option value="none">SFW Only</option>
+                                                    <option value="suggestive">SFW + Suggestive</option>
+                                                    <option value="explicit">All (including NSFW)</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <label className="flex flex-col gap-2 text-sm">
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">Bearer Token (Firebase JWT)</span>
+                                            <textarea
+                                                name="wyvern_bearerToken"
+                                                rows={3}
+                                                defaultValue={config?.wyvernSync?.bearerToken || ''}
+                                                placeholder="Paste JWT from browser (expires hourly)"
+                                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-700 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                                                Get from browser DevTools &gt; Network tab &gt; Authorization header. Token expires hourly.
+                                            </span>
+                                        </label>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                                            Scrapes characters from wyvern.chat API. Uses explore search endpoint and downloads full character data with avatar images.
+                                        </p>
                                     </div>
                                 </div>
 

@@ -267,6 +267,8 @@ export function FilterBar({
               <option value="all">All</option>
               <option value="chub">Chub</option>
               <option value="ct">Character Tavern</option>
+              <option value="risuai">RisuAI</option>
+              <option value="wyvern">Wyvern</option>
             </select>
           </label>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">

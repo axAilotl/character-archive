@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchConfig as fetchConfigApi, updateConfig as updateConfigApi } from "@/lib/api";
 import type { Config } from "@/lib/types";
-import { defaultSillyTavernState, defaultCtSyncState, defaultVectorSearchState } from "../types/config";
+import { defaultSillyTavernState, defaultCtSyncState, defaultVectorSearchState, defaultWyvernSyncState } from "../types/config";
 
 interface UseConfigResult {
   config: Config | null;
@@ -135,6 +135,20 @@ export function useConfig(): UseConfigResult {
         allowedWarnings: getStringValue("ct_allowedWarnings", { trim: true }),
       };
 
+      const risuAiConfig = {
+        enabled: data.get("risu_enabled") === "on",
+        pageLimit: parseNumberValue("risu_pageLimit", previousConfig.risuAiSync?.pageLimit ?? 5),
+      };
+
+      const previousWyvern = previousConfig.wyvernSync || defaultWyvernSyncState;
+      const wyvernConfig = {
+        enabled: data.get("wyvern_enabled") === "on",
+        pageLimit: parseNumberValue("wyvern_pageLimit", previousWyvern.pageLimit),
+        itemsPerPage: parseNumberValue("wyvern_itemsPerPage", previousWyvern.itemsPerPage),
+        rating: getStringValue("wyvern_rating", { trim: true }) || previousWyvern.rating,
+        bearerToken: getStringValue("wyvern_bearerToken", { trim: true }),
+      };
+
       const previousVector = previousConfig.vectorSearch || defaultVectorSearchState;
       const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
       const vectorConfig = {
@@ -198,6 +212,8 @@ export function useConfig(): UseConfigResult {
         publicBaseUrl: getStringValue("publicBaseUrl", { trim: true }),
         sillyTavern: sillyConfig,
         ctSync: ctConfig,
+        risuAiSync: risuAiConfig,
+        wyvernSync: wyvernConfig,
         vectorSearch: vectorConfig,
       };
 

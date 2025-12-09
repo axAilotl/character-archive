@@ -127,6 +127,17 @@ export interface Config {
     session: string;
     allowedWarnings: string;
   };
+  risuAiSync?: {
+    enabled: boolean;
+    pageLimit: number;
+  };
+  wyvernSync?: {
+    enabled: boolean;
+    pageLimit: number;
+    itemsPerPage: number;
+    rating: string;
+    bearerToken: string;
+  };
   meilisearch?: {
     enabled: boolean;
     host: string;

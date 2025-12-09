@@ -15,7 +15,7 @@ import { SyncStatus, PushNotification } from "./components/StatusBanners";
 import { SettingsModal } from "./components/SettingsModal";
 import { FederationModal } from "./components/FederationModal";
 import { defaultFilters, normalizeFilters } from "./types/filters";
-import { defaultSillyTavernState, defaultCtSyncState, defaultVectorSearchState } from "./types/config";
+import { defaultSillyTavernState, defaultCtSyncState, defaultVectorSearchState, defaultWyvernSyncState } from "./types/config";
 import { parseTagString } from "./utils/tags";
 import { useLightbox } from "./hooks/useLightbox";
 import { useCardSelection } from "./hooks/useCardSelection";
@@ -375,7 +375,7 @@ function HomeContent() {
         onRefresh={() => loadCards()}
         onSaveSearch={() => handleSaveSearch(filters, includeTagsSelected, excludeTagsSelected)}
         onSync={async () => {
-          if (config?.syncFollowedCreators) await startSyncing();
+          await startSyncing();
           if (config?.ctSync?.enabled) await startCtSyncing();
         }}
         onOpenFederation={() => setShowFederation(true)}
@@ -504,6 +504,7 @@ function HomeContent() {
         defaultSillyTavernState={defaultSillyTavernState}
         defaultCtSyncState={defaultCtSyncState}
         defaultVectorSearchState={defaultVectorSearchState}
+        defaultWyvernSyncState={defaultWyvernSyncState}
       />
       <FederationModal
         show={showFederation}

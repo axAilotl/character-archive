@@ -50,3 +50,11 @@ export const defaultVectorSearchState = {
     chunkWeight: 0.6,
     rrfK: 60,
 };
+
+export const defaultWyvernSyncState = {
+    enabled: false,
+    pageLimit: 50,
+    itemsPerPage: 50,
+    rating: 'explicit',
+    bearerToken: '',
+};

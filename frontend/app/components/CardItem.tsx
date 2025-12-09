@@ -101,11 +101,17 @@ export function CardItem({
           <span
             className={clsx(
               "flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold backdrop-blur",
-              card.source === "ct" ? "bg-emerald-500/80 text-white" : "bg-slate-900/40 text-white",
+              card.source === "ct" ? "bg-emerald-500/80 text-white" :
+              card.source === "risuai" ? "bg-pink-500/80 text-white" :
+              card.source === "wyvern" ? "bg-purple-500/80 text-white" : "bg-slate-900/40 text-white",
             )}
           >
-            {card.source === "ct" ? <Globe className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
-            {card.source === "ct" ? "CT" : "Chub"}
+            {card.source === "ct" ? <Globe className="h-3 w-3" /> :
+             card.source === "risuai" ? <Smile className="h-3 w-3" /> :
+             card.source === "wyvern" ? <Globe className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+            {card.source === "ct" ? "CT" :
+             card.source === "risuai" ? "Risu" :
+             card.source === "wyvern" ? "Wyvern" : "Chub"}
           </span>
           {card.loadedInSillyTavern && (
             <span

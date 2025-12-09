@@ -90,6 +90,15 @@ function resolveSourceUrlValue({ source, sourceUrl, sourcePath, sourceId, fullPa
         }
     }
 
+    if (source === 'risuai') {
+        if (sourceUrl && sourceUrl.includes('risuai.net')) {
+            return sourceUrl;
+        }
+        if (sourceId) {
+            return `https://realm.risuai.net/character/${sourceId}`;
+        }
+    }
+
     if (sourceUrl) {
         return sourceUrl;
     }
@@ -171,7 +180,7 @@ export function upsertCard(metadata) {
         ? metadata.topics
         : splitTopicsToArray(metadata.topics || '');
     const topics = Array.isArray(metadata.topics) ? metadata.topics.join(',') : metadata.topics || '';
-    const author = metadata.fullPath ? metadata.fullPath.split('/')[0] : '';
+    const author = metadata.author || (metadata.fullPath ? metadata.fullPath.split('/')[0] : '');
     const combinedText = `${metadata.description || ''} ${metadata.tagline || ''}`;
     const language = detectLanguage(combinedText);
 
