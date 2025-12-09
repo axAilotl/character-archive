@@ -17,7 +17,7 @@ import {
     isBlacklisted 
 } from './ApiClient.js';
 import { syncRisuAi } from './RisuAiService.js';
-import { syncWyvern } from './WyvernService.js';
+import { syncWyvern } from './scrapers/WyvernScraper.js';
 import { syncLinkedLorebooks } from './LorebookService.js';
 
 const scraperLogger = logger.scoped('SCRAPER');

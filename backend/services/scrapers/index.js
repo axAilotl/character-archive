@@ -4,19 +4,21 @@
 
 export { BaseScraper } from './BaseScraper.js';
 
-// Concrete scrapers will be added as they are migrated:
-// export { ChubScraper } from './ChubScraper.js';
+// Concrete scrapers
+export { WyvernScraper, syncWyvern, refreshWyvernCard } from './WyvernScraper.js';
 // export { RisuAiScraper } from './RisuAiScraper.js';
-// export { WyvernScraper } from './WyvernScraper.js';
 // export { CtScraper } from './CtScraper.js';
+// export { ChubScraper } from './ChubScraper.js';
+
+// Import classes for registry
+import { WyvernScraper } from './WyvernScraper.js';
 
 // Registry of all available scrapers
 export const scraperRegistry = {
-    // Scrapers will be registered here as they are migrated
-    // chub: ChubScraper,
+    wyvern: WyvernScraper,
     // risuai: RisuAiScraper,
-    // wyvern: WyvernScraper,
     // ct: CtScraper,
+    // chub: ChubScraper,
 };
 
 /**
