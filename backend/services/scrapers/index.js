@@ -8,19 +8,20 @@ export { BaseScraper } from './BaseScraper.js';
 export { WyvernScraper, syncWyvern, refreshWyvernCard } from './WyvernScraper.js';
 export { RisuAiScraper, syncRisuAi, refreshRisuCard } from './RisuAiScraper.js';
 export { CtScraper, syncCharacterTavern } from './CtScraper.js';
-// export { ChubScraper } from './ChubScraper.js';
+export { ChubScraper, syncChub, refreshChubCard } from './ChubScraper.js';
 
 // Import classes for registry
 import { WyvernScraper } from './WyvernScraper.js';
 import { RisuAiScraper } from './RisuAiScraper.js';
 import { CtScraper } from './CtScraper.js';
+import { ChubScraper } from './ChubScraper.js';
 
 // Registry of all available scrapers
 export const scraperRegistry = {
     wyvern: WyvernScraper,
     risuai: RisuAiScraper,
     ct: CtScraper,
-    // chub: ChubScraper,
+    chub: ChubScraper,
 };
 
 /**
