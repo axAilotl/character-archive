@@ -1,7 +1,7 @@
 
 import { loadConfig } from '../../config.js';
 import { syncCards } from './scraper.js';
-import { syncCharacterTavern } from './ct-sync.js';
+import { syncCharacterTavern } from './scrapers/CtScraper.js';
 import { drainSearchIndexQueue, isSearchIndexEnabled } from './search-index.js';
 import { lockService } from './LockService.js';
 import { logger } from '../utils/logger.js';

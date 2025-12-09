@@ -1,5 +1,5 @@
 import { syncCards } from '../services/scraper.js';
-import { syncCharacterTavern } from '../services/ct-sync.js';
+import { syncCharacterTavern } from '../services/scrapers/CtScraper.js';
 import { fetchChubFollows } from '../services/SyncService.js';
 import { lockService } from '../services/LockService.js';
 import { getDatabase } from '../database.js';
