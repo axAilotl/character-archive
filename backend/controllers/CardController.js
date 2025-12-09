@@ -1,32 +1,49 @@
+/**
+ * CardController - Thin orchestration layer for card operations
+ *
+ * Delegates to services:
+ * - CardQueryService: listing, search, decoration
+ * - CardMetadataService: PNG info, metadata, feature flags
+ * - CardService: favorites, gallery flags
+ * - asset-cache: gallery caching
+ * - scraper: card refresh
+ */
+
 import { appConfig } from '../services/ConfigState.js';
 import { sillyTavernService } from '../services/SillyTavernService.js';
-import { federationService, getRemoteCardNames } from '../services/FederationService.js';
+import { federationService } from '../services/FederationService.js';
 import { logger } from '../utils/logger.js';
 
 const log = logger.scoped('CARD');
+
 import {
-    getCards,
-    getCardsByIdsOrdered,
-    getAllLanguages,
-    getRandomTags,
     LANGUAGE_MAPPING,
     getDatabase,
     toggleFavorite,
-    deleteCard,
-    getTagAliasesSnapshot
+    deleteCard as dbDeleteCard
 } from '../database.js';
+
 import {
-    isSearchIndexEnabled,
-    isVectorSearchReady,
-    searchMeilisearchCards,
-    searchVectorCards
-} from '../services/search-index.js';
-import { cacheService } from '../services/CacheService.js';
-import fs from 'fs';
-import path from 'path';
-import FormData from 'form-data';
-import axios from 'axios';
-import { readCardPngSpec, getCardFilePaths, deriveFeatureFlagsFromSpec } from '../utils/card-utils.js';
+    parseListParams,
+    buildCacheKey,
+    decorateCards,
+    attachVectorMetadata,
+    fetchIntegrationStatus,
+    performAdvancedSearch,
+    performBasicSearch,
+    buildResponse,
+    checkCache,
+    setCache,
+    invalidateCache
+} from '../services/CardQueryService.js';
+
+import {
+    getPngInfo,
+    getCardMetadata,
+    syncFeatureFlagsFromMetadata
+} from '../services/CardMetadataService.js';
+
+import { getCardFilePaths } from '../utils/card-utils.js';
 import { refreshCard } from '../services/scraper.js';
 import { refreshRisuCard } from '../services/scrapers/RisuAiScraper.js';
 import {
@@ -35,105 +52,30 @@ import {
     refreshGalleryIfNeeded
 } from '../services/CardService.js';
 import { syncFavoriteToChub } from '../services/SyncService.js';
-import { clearCardAssets, cacheGalleryAssets, getGalleryAssets, rewriteCardUrls } from '../services/asset-cache.js';
+import {
+    clearCardAssets,
+    cacheGalleryAssets,
+    getGalleryAssets,
+    rewriteCardUrls
+} from '../services/asset-cache.js';
 
-// Helper to send cached response (duplicated from server.js for now, should be shared util)
-function sendCachedResponse(res, data, cacheKey, startTime, page) {
-    const duration = Date.now() - startTime;
-    if (page > 1 && cacheKey) {
-        cacheService.set(cacheKey, data);
-    }
-    res.set('X-Cache', 'MISS');
-    res.set('X-Response-Time', `${duration}ms`);
-    res.json(data);
-}
-
-// Helper (this should probably be in a service, but keeping here for now as it was in server.js)
-const STATIC_DIR = path.join(process.cwd(), 'static');
-
-// Local cache invalidation helper (since we moved queryCache into this file/class)
-const invalidateQueryCache = () => {
-    cacheService.flush();
-};
-
-
-async function syncFeatureFlagsFromMetadata(cardId, metadata) {
-    if (!metadata || typeof metadata !== 'object') {
-        return;
-    }
-    const database = getDatabase();
-    const spec = readCardPngSpec(cardId);
-    const specFlags = spec ? deriveFeatureFlagsFromSpec(spec) : {};
-
-    const pickBoolean = (key) => {
-        if (typeof metadata[key] !== 'undefined') {
-            return metadata[key] ? 1 : 0;
-        }
-        if (typeof specFlags[key] !== 'undefined') {
-            return specFlags[key] ? 1 : 0;
-        }
-        return 0;
-    };
-
-    try {
-        database.prepare(
-            `UPDATE cards SET
-                hasAlternateGreetings = ?,
-                hasLorebook = ?,
-                hasEmbeddedLorebook = ?,
-                hasLinkedLorebook = ?,
-                hasExampleDialogues = ?,
-                hasSystemPrompt = ?,
-                hasGallery = ?,
-                hasEmbeddedImages = ?,
-                hasExpressions = ?
-            WHERE id = ?`
-        ).run(
-            pickBoolean('hasAlternateGreetings'),
-            pickBoolean('hasLorebook'),
-            pickBoolean('hasEmbeddedLorebook'),
-            pickBoolean('hasLinkedLorebook'),
-            pickBoolean('hasExampleDialogues'),
-            pickBoolean('hasSystemPrompt'),
-            pickBoolean('hasGallery'),
-            pickBoolean('hasEmbeddedImages'),
-            pickBoolean('hasExpressions'),
-            cardId
-        );
-    } catch (error) {
-        log.warn(`Failed to sync metadata flags for card ${cardId}`, error);
-    }
-
-    Object.assign(metadata, {
-        hasAlternateGreetings: Boolean(pickBoolean('hasAlternateGreetings')),
-        hasLorebook: Boolean(pickBoolean('hasLorebook')),
-        hasEmbeddedLorebook: Boolean(pickBoolean('hasEmbeddedLorebook')),
-        hasLinkedLorebook: Boolean(pickBoolean('hasLinkedLorebook')),
-        hasExampleDialogues: Boolean(pickBoolean('hasExampleDialogues')),
-        hasSystemPrompt: Boolean(pickBoolean('hasSystemPrompt')),
-        hasGallery: Boolean(pickBoolean('hasGallery')),
-        hasEmbeddedImages: Boolean(pickBoolean('hasEmbeddedImages')),
-        hasExpressions: Boolean(pickBoolean('hasExpressions'))
-    });
-}
+import fs from 'fs';
+import path from 'path';
+import FormData from 'form-data';
+import axios from 'axios';
 
 class CardController {
+    // ==================== Metadata Endpoints ====================
+
     getPngInfo = (req, res) => {
         try {
             const cardId = req.params.cardId;
-            const spec = readCardPngSpec(cardId);
+            const spec = getPngInfo(cardId);
+
             if (!spec) {
                 return res.status(404).json({ error: 'No embedded data found' });
             }
-            const { jsonPath } = getCardFilePaths(cardId);
-            if (fs.existsSync(jsonPath)) {
-                try {
-                    const metadata = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-                    spec.Tagline = metadata.tagline;
-                } catch (error) {
-                    log.warn('Failed to attach tagline to PNG info', error);
-                }
-            }
+
             res.json({ data: spec });
         } catch (error) {
             log.error('Get PNG info error', error);
@@ -144,15 +86,12 @@ class CardController {
     getCardMetadata = async (req, res) => {
         try {
             const cardId = req.params.cardId;
-            const { jsonPath } = getCardFilePaths(cardId);
-            
-            if (!fs.existsSync(jsonPath)) {
+            const metadata = await getCardMetadata(cardId);
+
+            if (!metadata) {
                 return res.status(404).json({ error: 'Metadata not found' });
             }
-            
-            const metadataRaw = await fs.promises.readFile(jsonPath, 'utf8');
-            const metadata = JSON.parse(metadataRaw);
-            await syncFeatureFlagsFromMetadata(cardId, metadata);
+
             res.json(metadata);
         } catch (error) {
             log.error('Get metadata error', error);
@@ -160,30 +99,26 @@ class CardController {
         }
     };
 
+    // ==================== Card Actions ====================
+
     refreshCard = async (req, res) => {
         try {
             const cardId = req.params.cardId;
-
-            // Check card source
             const db = getDatabase();
             const card = db.prepare('SELECT source FROM cards WHERE id = ?').get(cardId);
 
-            if (card && card.source === 'ct') {
+            if (card?.source === 'ct') {
                 return res.status(400).json({ error: 'Refreshing Character Tavern cards is not currently supported.' });
             }
 
-            if (card && card.source === 'risuai') {
-                // Use RisuAI refresh
+            if (card?.source === 'risuai') {
                 await refreshRisuCard(cardId, appConfig);
             } else {
-                // Use Chub refresh
                 await refreshCard(cardId, appConfig);
             }
 
             const galleryResult = await refreshGalleryIfNeeded(parseInt(cardId, 10));
-
-            // Invalidate cache since card was refreshed
-            invalidateQueryCache();
+            invalidateCache();
 
             res.json({ success: true, gallery: galleryResult });
         } catch (error) {
@@ -203,12 +138,12 @@ class CardController {
                 return res.json(result);
             }
 
-            let hasGallery = false;
-            let galleryResult = null;
             const isFavorited = result.favorited === 1;
-
             await setCardFavoriteFlag(cardId, isFavorited);
             await syncFavoriteToChub(cardSourceInfo, isFavorited);
+
+            let hasGallery = false;
+            let galleryResult = null;
 
             if (isFavorited) {
                 galleryResult = await cacheGalleryAssets(cardId, appConfig.apikey);
@@ -231,14 +166,9 @@ class CardController {
                 await setCardGalleryFlag(cardId, false);
             }
 
-            // Invalidate cache since favorite status changed
-            invalidateQueryCache();
+            invalidateCache();
 
-            res.json({
-                ...result,
-                hasGallery,
-                gallery: galleryResult
-            });
+            res.json({ ...result, hasGallery, gallery: galleryResult });
         } catch (error) {
             log.error('Toggle favorite error', error);
             res.status(500).json({ success: false, message: error.message });
@@ -251,34 +181,29 @@ class CardController {
             const cardIdNum = parseInt(cardId);
             const database = getDatabase();
 
-            // Fetch source info BEFORE deleting so we can blacklist CT cards properly
             const existing = database.prepare('SELECT source, sourceId FROM cards WHERE id = ?').get(cardIdNum);
-
             const { jsonPath, pngPath } = getCardFilePaths(cardId);
 
             if (fs.existsSync(pngPath)) fs.unlinkSync(pngPath);
             if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 
-            // Clean up cached assets (both DB and filesystem)
             try {
                 await clearCardAssets(cardIdNum);
             } catch (assetError) {
                 log.warn(`Failed to cleanup assets for card ${cardId}`, assetError);
             }
 
-            const result = deleteCard(cardIdNum);
+            const result = dbDeleteCard(cardIdNum);
 
             const blacklistPath = path.join(process.cwd(), 'blacklist.txt');
             fs.appendFileSync(blacklistPath, `${cardId}\n`);
 
-            // Also blacklist the CT source ID if applicable
             if (existing?.source === 'ct' && existing.sourceId) {
                 const { addCtBlacklistEntry } = await import('../utils/ct-blacklist.js');
                 addCtBlacklistEntry(existing.sourceId);
             }
 
-            invalidateQueryCache();
-
+            invalidateCache();
             res.json(result);
         } catch (error) {
             log.error('Delete card error', error);
@@ -288,10 +213,8 @@ class CardController {
 
     bulkDelete = async (req, res) => {
         try {
-            const { cardIds } = req.body;
-            // Map card_ids (legacy) or cardIds
-            const ids = cardIds || req.body.card_ids;
-            
+            const ids = req.body.cardIds || req.body.card_ids;
+
             if (!Array.isArray(ids) || ids.length === 0) {
                 return res.status(400).json({ error: 'No card IDs provided' });
             }
@@ -306,23 +229,23 @@ class CardController {
                     const cardId = String(rawId);
                     const cardIdNum = parseInt(cardId);
                     const existing = database.prepare('SELECT source, sourceId FROM cards WHERE id = ?').get(cardIdNum);
-                    
                     const { jsonPath, pngPath } = getCardFilePaths(cardId);
-                    
+
                     if (fs.existsSync(pngPath)) fs.unlinkSync(pngPath);
                     if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
-                    
+
                     try {
                         await clearCardAssets(cardIdNum);
                     } catch (assetError) {
                         log.warn(`Failed to cleanup assets for card ${cardId}`, assetError);
                     }
-                    
-                    deleteCard(cardIdNum);
+
+                    dbDeleteCard(cardIdNum);
                     deleted.push(cardId);
-                    
+
                     const blacklistPath = path.join(process.cwd(), 'blacklist.txt');
                     fs.appendFileSync(blacklistPath, `${cardId}\n`);
+
                     if (existing?.source === 'ct' && existing.sourceId) {
                         addCtBlacklistEntry(existing.sourceId);
                     }
@@ -331,8 +254,7 @@ class CardController {
                 }
             }
 
-            invalidateQueryCache();
-
+            invalidateCache();
             res.json({ success: true, deleted, errors });
         } catch (error) {
             log.error('Bulk delete error', error);
@@ -340,17 +262,18 @@ class CardController {
         }
     };
 
+    // ==================== Card Updates ====================
+
     setLanguage = async (req, res) => {
         try {
             const { cardId } = req.params;
             const { language } = req.body;
-            
+
             if (!language) {
                 return res.status(400).json({ error: 'Language is required' });
             }
 
-            const { getDatabase: getDb } = await import('../database.js');
-            const db = getDb();
+            const db = getDatabase();
             db.prepare('UPDATE cards SET language = ? WHERE id = ?').run(language, cardId);
 
             const languageName = LANGUAGE_MAPPING[language] || language;
@@ -365,8 +288,7 @@ class CardController {
         try {
             const { cardId } = req.params;
             const metadata = req.body;
-            
-            // Support legacy { tags: "a,b,c" } format or new { topics: ["a","b"] }
+
             let topics = [];
             if (metadata.tags && typeof metadata.tags === 'string') {
                 topics = metadata.tags.split(',').map(t => t.trim()).filter(Boolean);
@@ -376,7 +298,6 @@ class CardController {
                 return res.status(400).json({ error: 'Tags/topics are required' });
             }
 
-            // Update JSON file
             const { jsonPath } = getCardFilePaths(cardId);
             if (fs.existsSync(jsonPath)) {
                 const fileData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
@@ -384,16 +305,17 @@ class CardController {
                 fs.writeFileSync(jsonPath, JSON.stringify(fileData, null, 4));
             }
 
-            const { getDatabase: getDb } = await import('../database.js');
-            const db = getDb();
+            const db = getDatabase();
             db.prepare('UPDATE cards SET topics = ? WHERE id = ?').run(topics.join(','), parseInt(cardId));
 
-            res.json({ message: 'Tags updated successfully', topics: topics });
+            res.json({ message: 'Tags updated successfully', topics });
         } catch (error) {
             log.error('Edit tags error', error);
             res.status(500).json({ error: error.message });
         }
     };
+
+    // ==================== Export ====================
 
     exportCard = async (req, res) => {
         try {
@@ -401,7 +323,6 @@ class CardController {
             const format = req.query.format || 'png';
             const { jsonPath, pngPath, charxPath } = getCardFilePaths(cardId);
 
-            // Check which files exist
             const hasCharx = fs.existsSync(charxPath);
             const hasPng = fs.existsSync(pngPath);
 
@@ -415,17 +336,11 @@ class CardController {
                 }
                 res.download(jsonPath, `${cardId}.json`);
             } else if (format === 'charx' && hasCharx) {
-                // Direct CharX download
                 res.download(charxPath, `${cardId}.charx`);
             } else {
-                // Use useLocal=true default
                 const useLocal = req.query.useLocal !== 'false';
                 const result = await rewriteCardUrls(cardId, useLocal);
-                if (result.success) {
-                    res.json(result);
-                } else {
-                    res.json(result);
-                }
+                res.json(result);
             }
         } catch (error) {
             log.error('Export card error', error);
@@ -433,13 +348,15 @@ class CardController {
         }
     };
 
+    // ==================== Push to External ====================
+
     pushToSillyTavern = async (req, res) => {
         try {
             const cardId = req.params.cardId;
             const cardIdStr = String(cardId);
             const overwrite = req.body?.overwrite || false;
 
-            // Try federation first if configured
+            // Try federation first
             const stPlatform = federationService.getPlatformConfig('sillytavern');
             if (stPlatform?.enabled && stPlatform?.base_url) {
                 try {
@@ -452,11 +369,10 @@ class CardController {
                     });
                 } catch (fedError) {
                     log.warn('Federation push failed, falling back to legacy method:', fedError.message);
-                    // Fall through to legacy method
                 }
             }
 
-            // Legacy method (direct SillyTavern API)
+            // Legacy method
             const { pngPath } = getCardFilePaths(cardIdStr);
 
             if (!fs.existsSync(pngPath)) {
@@ -464,8 +380,11 @@ class CardController {
             }
 
             const sillyConfig = appConfig.sillyTavern;
-            if (!sillyConfig || !sillyConfig.enabled || !sillyConfig.baseUrl) {
-                return res.status(400).json({ success: false, error: 'SillyTavern integration not configured. Enable federation or configure legacy sillyTavern settings.' });
+            if (!sillyConfig?.enabled || !sillyConfig?.baseUrl) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'SillyTavern integration not configured. Enable federation or configure legacy sillyTavern settings.'
+                });
             }
 
             const baseUrl = sillyConfig.baseUrl.replace(/\/$/, '');
@@ -476,29 +395,25 @@ class CardController {
             }
 
             // Get CSRF
-            const csrfUrl = `${baseUrl}/csrf-token`;
-            console.log(`[INFO] Fetching SillyTavern CSRF from: ${csrfUrl}`);
-
-            const csrfResponse = await axios.get(csrfUrl, {
+            const csrfResponse = await axios.get(`${baseUrl}/csrf-token`, {
                 headers: csrfHeaders,
                 timeout: 15000,
                 validateStatus: () => true
             });
 
             if (csrfResponse.status < 200 || csrfResponse.status >= 300 || !csrfResponse.data?.token) {
-                log.error(`Failed to get CSRF token from ${csrfUrl}`, null, { status: csrfResponse.status });
-                const message = csrfResponse.data?.error || `Failed to obtain Silly Tavern CSRF token (Status: ${csrfResponse.status})`;
-                return res.status(csrfResponse.status || 502).json({ success: false, error: message, response: csrfResponse.data });
+                const message = csrfResponse.data?.error || `Failed to obtain CSRF token (Status: ${csrfResponse.status})`;
+                return res.status(csrfResponse.status || 502).json({ success: false, error: message });
             }
 
             const csrfToken = csrfResponse.data.token;
+
+            // Build cookie header
             const cookieSet = new Set();
             const registerCookie = (value) => {
                 if (!value) return;
                 const cookieString = value.split(';')[0];
-                if (cookieString) {
-                    cookieSet.add(cookieString.trim());
-                }
+                if (cookieString) cookieSet.add(cookieString.trim());
             };
 
             const setCookieHeader = csrfResponse.headers['set-cookie'];
@@ -520,9 +435,10 @@ class CardController {
             const cookieHeader = Array.from(cookieSet).join('; ');
 
             if (!cookieHeader) {
-                return res.status(502).json({ success: false, error: 'Failed to capture Silly Tavern session cookies' });
+                return res.status(502).json({ success: false, error: 'Failed to capture session cookies' });
             }
 
+            // Build and send form
             const form = new FormData();
             form.append('avatar', fs.createReadStream(pngPath), {
                 filename: `${cardIdStr}.png`,
@@ -531,34 +447,24 @@ class CardController {
             form.append('file_type', 'png');
             form.append('preserved_name', cardIdStr);
 
-            const formHeaders = form.getHeaders();
-            const importHeaders = {
-                ...baseHeaders,
-                ...formHeaders,
-                Cookie: cookieHeader,
-                'X-CSRF-Token': csrfToken,
-                Accept: 'application/json, text/plain, */*'
-            };
-
             const importResponse = await axios.post(`${baseUrl}/api/characters/import`, form, {
-                headers: importHeaders,
+                headers: {
+                    ...baseHeaders,
+                    ...form.getHeaders(),
+                    Cookie: cookieHeader,
+                    'X-CSRF-Token': csrfToken,
+                    Accept: 'application/json, text/plain, */*'
+                },
                 timeout: 30000,
                 maxBodyLength: Infinity,
                 validateStatus: () => true
             });
 
             if (importResponse.status >= 200 && importResponse.status < 300) {
-                // Refresh SillyTavern
+                // Refresh plugin
                 try {
-                    const refreshHeaders = {
-                        ...baseHeaders,
-                        Cookie: cookieHeader,
-                        'X-CSRF-Token': csrfToken,
-                        Accept: 'application/json, text/plain, */*',
-                        'Content-Type': 'application/json'
-                    };
                     await axios.post(`${baseUrl}/api/plugins/my-list-cards/refresh`, {}, {
-                        headers: refreshHeaders,
+                        headers: { ...baseHeaders, Cookie: cookieHeader, 'X-CSRF-Token': csrfToken },
                         timeout: 20000,
                         validateStatus: () => true
                     });
@@ -580,10 +486,9 @@ class CardController {
 
             res.status(importResponse.status || 502).json({
                 success: false,
-                error: importResponse.data?.error || 'Silly Tavern rejected the import request',
+                error: importResponse.data?.error || 'Import request rejected',
                 response: importResponse.data
             });
-
         } catch (error) {
             log.error('Push to SillyTavern failed', error);
             res.status(500).json({ success: false, error: error.message });
@@ -595,7 +500,7 @@ class CardController {
             const cardId = req.params.cardId;
             const cardIdStr = String(cardId);
 
-            // Try federation first if configured
+            // Try federation first
             const architectPlatform = federationService.getPlatformConfig('architect');
             if (architectPlatform?.enabled && architectPlatform?.base_url) {
                 try {
@@ -607,12 +512,11 @@ class CardController {
                         message: `Pushed via federation to ${architectPlatform.base_url}`
                     });
                 } catch (fedError) {
-                    log.warn('Federation push to Architect failed, falling back to legacy method:', fedError.message);
-                    // Fall through to legacy method
+                    log.warn('Federation push to Architect failed:', fedError.message);
                 }
             }
 
-            // Legacy method (URL-based import)
+            // Legacy method
             const architectUrl = appConfig.characterArchitect?.url || 'http://localhost:3456';
             const { pngPath } = getCardFilePaths(cardIdStr);
 
@@ -626,27 +530,15 @@ class CardController {
             const response = await axios.post(
                 `${architectUrl}/api/import-url`,
                 { url: publicUrl },
-                {
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 30000
-                }
+                { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
             );
 
-            if (response.status === 201) {
-                res.json({
-                    success: true,
-                    method: 'legacy',
-                    message: 'Card pushed successfully',
-                    architectResponse: response.data
-                });
-            } else {
-                res.json({
-                    success: true,
-                    method: 'legacy',
-                    message: 'Card pushed with non-standard response',
-                    architectResponse: response.data
-                });
-            }
+            res.json({
+                success: true,
+                method: 'legacy',
+                message: response.status === 201 ? 'Card pushed successfully' : 'Card pushed with non-standard response',
+                architectResponse: response.data
+            });
         } catch (error) {
             log.error('Push to Architect failed', error);
             let errorMessage = error.message;
@@ -657,343 +549,86 @@ class CardController {
         }
     };
 
+    // ==================== List Cards ====================
+
     async listCards(req, res) {
         try {
-            const page = parseInt(req.query.page) || 1;
-            const rawLimit = parseInt(req.query.limit, 10);
-            const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 48;
-            const query = (req.query.query || '').toString();
-            const useAdvancedSearch = req.query.advanced === 'true';
-            const advancedText = (req.query.advancedText || '').toString();
-            const advancedFilter = (req.query.advancedFilter || '').toString();
-            const include = (req.query.include || '').toString();
-            const exclude = (req.query.exclude || '').toString();
-            const searchType = (req.query.type || 'full').toString();
-            const tagMatchMode = (req.query.tagMatchMode || 'or').toString();
-            const sort = (req.query.sort || 'new').toString();
-            const language = req.query.language ? req.query.language.toString() : null;
-            const favoriteFilter = req.query.favorite ? req.query.favorite.toString() : null;
-            const sourceParam = req.query.source ? req.query.source.toString() : 'all';
-            const normalizedSource = ['chub', 'ct', 'risuai'].includes(sourceParam) ? sourceParam : 'all';
-            const hasAlternateGreetings = req.query.hasAlternateGreetings === 'true';
-            const hasLorebook = req.query.hasLorebook === 'true';
-            const hasEmbeddedLorebook = req.query.hasEmbeddedLorebook === 'true';
-            const hasLinkedLorebook = req.query.hasLinkedLorebook === 'true';
-            const hasExampleDialogues = req.query.hasExampleDialogues === 'true';
-            const hasSystemPrompt = req.query.hasSystemPrompt === 'true';
-            const hasGallery = req.query.hasGallery === 'true';
-            const hasEmbeddedImages = req.query.hasEmbeddedImages === 'true';
-            const hasExpressions = req.query.hasExpressions === 'true';
-            const inSillyTavern = req.query.inSillyTavern === 'true';
-            const withSillyStatus = req.query.withSillyStatus === 'true';
-            const followedOnly = req.query.followedOnly === 'true';
-            const minTokensRaw = parseInt(req.query.minTokens, 10);
-            const minTokens = Number.isFinite(minTokensRaw) && minTokensRaw > 0 ? minTokensRaw : null;
+            const params = parseListParams(req.query);
+            const cacheKey = buildCacheKey(params);
 
-            // Build cache key
-            const cacheKey = (page > 1 && !inSillyTavern && !withSillyStatus) ? JSON.stringify({
-                page, limit, query, useAdvancedSearch, advancedText, advancedFilter,
-                include, exclude, tagMatchMode, sort, language, favoriteFilter,
-                source: normalizedSource, hasAlternateGreetings, hasLorebook,
-                hasEmbeddedLorebook, hasLinkedLorebook, hasExampleDialogues,
-                hasSystemPrompt, hasGallery, hasEmbeddedImages, hasExpressions, followedOnly, minTokens
-            }) : null;
-
-            if (cacheKey) {
-                const cached = cacheService.get(cacheKey);
-                if (cached) {
-                    res.set('X-Cache', 'HIT');
-                    res.set('X-Response-Time', '0ms');
-                    return res.json(cached);
-                }
+            // Check cache
+            const cached = checkCache(cacheKey);
+            if (cached) {
+                res.set('X-Cache', 'HIT');
+                res.set('X-Response-Time', '0ms');
+                return res.json(cached);
             }
 
             const startTime = Date.now();
-            let sillyLoadedSet = null;
-            let architectSyncedSet = null;
-            let allowedIds = null;
 
-            // Fetch architect card names via federation
+            // Fetch integration status
+            let integrationStatus;
             try {
-                architectSyncedSet = await getRemoteCardNames('architect');
+                integrationStatus = await fetchIntegrationStatus(params, req.header('cookie'));
             } catch (error) {
-                log.warn('Failed to fetch architect cards', error);
+                return res.status(error.message.includes('not enabled') ? 400 : 502).json({ error: error.message });
             }
 
-            if (inSillyTavern || withSillyStatus) {
-                if (!appConfig?.sillyTavern?.enabled || !appConfig?.sillyTavern?.baseUrl) {
-                    if (inSillyTavern) {
-                        return res.status(400).json({ error: 'Silly Tavern integration is not enabled' });
-                    }
+            const { sillyLoadedSet, architectSyncedSet, allowedIds } = integrationStatus;
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+            let result;
+            let advancedInfo = { enabled: false };
+
+            // Try advanced search if requested
+            if (params.useAdvancedSearch) {
+                const advancedResult = await performAdvancedSearch(params);
+
+                if (advancedResult.fallback) {
+                    advancedInfo.fallbackReason = advancedResult.fallbackReason;
                 } else {
-                    try {
-                        sillyLoadedSet = await sillyTavernService.fetchLoadedIds({ cookieHeader: req.header('cookie') });
-                    } catch (error) {
-                        log.error('Failed to fetch Silly Tavern loaded cards', error);
-                        if (inSillyTavern) {
-                            return res.status(502).json({ error: 'Failed to fetch Silly Tavern loaded cards' });
-                        }
-                        sillyLoadedSet = null;
+                    // Decorate and attach metadata
+                    decorateCards(advancedResult.cards, baseUrl, sillyLoadedSet, architectSyncedSet);
+
+                    if (advancedResult.mode === 'vector' && advancedResult.vectorResult) {
+                        attachVectorMetadata(advancedResult.cards, advancedResult.vectorResult);
                     }
-                }
-            }
 
-            if (inSillyTavern) {
-                const idList = sillyLoadedSet ? Array.from(sillyLoadedSet) : [];
-                allowedIds = idList
-                    .map(id => Number.parseInt(id, 10))
-                    .filter(id => Number.isInteger(id));
-                if (!sillyLoadedSet) {
-                    allowedIds = [];
-                }
-            }
-
-            const decorateCards = (cardsToDecorate) => {
-                const baseUrl = `${req.protocol}://${req.get('host')}`;
-                const sillySet = sillyLoadedSet instanceof Set ? sillyLoadedSet : null;
-                const architectSet = architectSyncedSet instanceof Set ? architectSyncedSet : null;
-                cardsToDecorate.forEach(card => {
-                    const imagePath = card.imagePath && card.imagePath.startsWith('/')
-                        ? card.imagePath
-                        : `/static/${card.id_prefix}/${card.id}.png`;
-                    card.imagePath = imagePath;
-                    card.silly_link = `${baseUrl}${imagePath}`;
-                    card.loadedInSillyTavern = sillySet ? sillySet.has(String(card.id)) : false;
-                    // Match by name (lowercased) for architect
-                    card.syncedToArchitect = architectSet ? architectSet.has((card.name || '').toLowerCase()) : false;
-                });
-            };
-
-            let advancedFallbackReason = null;
-            let vectorResponseMeta = null;
-
-            // Advanced Search Logic
-            if (useAdvancedSearch) {
-                if (!isSearchIndexEnabled()) {
-                    advancedFallbackReason = 'Advanced search requires Meilisearch. Falling back to basic search.';
-                } else {
-                    // We need to import buildMeilisearchFilter or recreate it.
-                    // For now, assuming we can import it from where it was defined or move it to a util.
-                    // Since I cannot easily import from server.js if it's not exported, I'll need to duplicate or move that helper.
-                    // I'll handle that in the next step. For now, let's assume it's available as a helper.
-                    const { buildMeilisearchFilter } = await import('../utils/searchUtils.js');
-                    
-                    const meiliFilterExpression = buildMeilisearchFilter({
-                        advancedFilter,
-                        include,
-                        exclude,
-                        tagMatchMode,
-                        minTokens,
-                        language,
-                        favoriteFilter,
-                        source: normalizedSource,
-                        hasAlternateGreetings,
-                        hasLorebook,
-                        hasEmbeddedLorebook,
-                        hasLinkedLorebook,
-                        hasExampleDialogues,
-                        hasSystemPrompt,
-                        hasGallery,
-                        hasEmbeddedImages,
-                        hasExpressions
-                    });
-
-                    const hasQueryText = Boolean((advancedText && advancedText.trim()) || (query && query.trim()));
-                    const hasAnyFilter = Boolean(meiliFilterExpression && meiliFilterExpression.trim().length > 0);
-
-                    if (!hasQueryText && !hasAnyFilter) {
-                        advancedFallbackReason = 'Advanced search needs a query or filters. Showing default results.';
-                    } else {
-                        const vectorPreferred = hasQueryText && appConfig?.vectorSearch?.enabled === true && isVectorSearchReady();
-                        if (vectorPreferred) {
-                            try {
-                                const [vectorResult, lexicalResult] = await Promise.all([
-                                    searchVectorCards({
-                                        text: advancedText || query || '',
-                                        filter: meiliFilterExpression,
-                                        page,
-                                        limit,
-                                        sort
-                                    }),
-                                    searchMeilisearchCards({
-                                        text: advancedText,
-                                        filter: meiliFilterExpression,
-                                        page,
-                                        limit,
-                                        sort: null
-                                    })
-                                ]);
-
-                                const vectorIds = Array.isArray(vectorResult.ids) ? vectorResult.ids : [];
-                                const lexicalIds = Array.isArray(lexicalResult.ids) ? lexicalResult.ids : [];
-                                const finalIds = [];
-                                const seen = new Set();
-
-                                for (const id of vectorIds) {
-                                    if (finalIds.length >= limit) break;
-                                    if (!seen.has(id)) {
-                                        finalIds.push(id);
-                                        seen.add(id);
-                                    }
-                                }
-
-                                if (finalIds.length < limit) {
-                                    for (const id of lexicalIds) {
-                                        if (finalIds.length >= limit) break;
-                                        if (!seen.has(id)) {
-                                            finalIds.push(id);
-                                            seen.add(id);
-                                        }
-                                    }
-                                }
-
-                                let cards = [];
-                                if (finalIds.length > 0) {
-                                    cards = getCardsByIdsOrdered(finalIds);
-                                }
-
-                                decorateCards(cards);
-                                if (vectorResult.chunkMatches) {
-                                    cards.forEach(card => {
-                                        if (vectorResult.chunkMatches[card.id]) {
-                                            card.vectorMatch = vectorResult.chunkMatches[card.id];
-                                        }
-                                    });
-                                }
-                                if (vectorResult.scores) {
-                                    cards.forEach(card => {
-                                        if (vectorResult.scores[card.id] !== undefined) {
-                                            card.semanticScore = vectorResult.scores[card.id];
-                                        }
-                                    });
-                                }
-
-                                let total = lexicalResult.total || vectorResult.total || cards.length;
-                                const totalPages = Math.max(1, Math.ceil(total / limit));
-                                const [randomTags, languages] = await Promise.all([
-                                    getRandomTags(),
-                                    getAllLanguages()
-                                ]);
-
-                                vectorResponseMeta = {
-                                    enabled: true,
-                                    appliedFilter: vectorResult.appliedFilter || '',
-                                    meta: vectorResult.meta || {},
-                                    chunkMatches: vectorResult.chunkMatches || {}
-                                };
-
-                                return sendCachedResponse(res, {
-                                    cards,
-                                    count: total,
-                                    page,
-                                    totalPages,
-                                    randomTags,
-                                    languages,
-                                    languageMapping: LANGUAGE_MAPPING,
-                                    advanced: {
-                                        enabled: true,
-                                        mode: 'vector',
-                                        query: advancedText,
-                                        filter: lexicalResult.appliedFilter || vectorResult.appliedFilter || ''
-                                    },
-                                    vector: vectorResponseMeta
-                                }, cacheKey, startTime, page);
-
-                            } catch (error) {
-                                log.error('Vector search failure', error);
-                                advancedFallbackReason = `Vector search failed. ${error?.message || ''}`.trim();
-                            }
+                    const response = await buildResponse(
+                        advancedResult.cards,
+                        advancedResult.total,
+                        params,
+                        {
+                            enabled: true,
+                            mode: advancedResult.mode,
+                            query: params.advancedText,
+                            filter: advancedResult.appliedFilter,
+                            vector: advancedResult.mode === 'vector' ? {
+                                enabled: true,
+                                appliedFilter: advancedResult.vectorResult?.appliedFilter || '',
+                                meta: advancedResult.vectorResult?.meta || {},
+                                chunkMatches: advancedResult.vectorResult?.chunkMatches || {}
+                            } : undefined
                         }
+                    );
 
-                        try {
-                            const meiliResult = await searchMeilisearchCards({
-                                text: advancedText,
-                                filter: meiliFilterExpression,
-                                page,
-                                limit,
-                                sort
-                            });
-
-                            let cards = [];
-                            if (meiliResult.ids.length > 0) {
-                                cards = getCardsByIdsOrdered(meiliResult.ids);
-                            }
-
-                            decorateCards(cards);
-                            const total = meiliResult.total || cards.length;
-                            const totalPages = Math.max(1, Math.ceil(total / limit));
-                            const randomTags = getRandomTags();
-                            const languages = getAllLanguages();
-
-                            return sendCachedResponse(res, {
-                                cards,
-                                count: total,
-                                page,
-                                totalPages,
-                                randomTags,
-                                languages,
-                                languageMapping: LANGUAGE_MAPPING,
-                                advanced: {
-                                    enabled: true,
-                                    query: advancedText,
-                                    filter: meiliResult.appliedFilter || ''
-                                },
-                                vector: vectorResponseMeta || undefined
-                            }, cacheKey, startTime, page);
-                        } catch (error) {
-                            log.error('Advanced search failure', error);
-                            advancedFallbackReason = error?.message || 'Advanced search failed. Falling back to basic search.';
-                        }
-                    }
+                    setCache(cacheKey, response, params.page);
+                    res.set('X-Cache', 'MISS');
+                    res.set('X-Response-Time', `${Date.now() - startTime}ms`);
+                    return res.json(response);
                 }
             }
 
-            // Basic DB Search
-            const result = getCards({
-                page,
-                limit,
-                query,
-                includeQuery: include,
-                excludeQuery: exclude,
-                searchType,
-                tagMatchMode,
-                sort,
-                language,
-                favoriteFilter,
-                source: normalizedSource,
-                hasAlternateGreetings,
-                hasLorebook,
-                hasEmbeddedLorebook,
-                hasLinkedLorebook,
-                hasExampleDialogues,
-                hasSystemPrompt,
-                hasGallery,
-                hasEmbeddedImages,
-                hasExpressions,
-                allowedIds,
-                followedOnly,
-                followedCreators: appConfig.followedCreators || [],
-                minTokens
-            });
+            // Basic search fallback
+            result = performBasicSearch(params, allowedIds);
+            decorateCards(result.cards, baseUrl, sillyLoadedSet, architectSyncedSet);
 
-            decorateCards(result.cards);
-            const randomTags = getRandomTags();
-            const languages = getAllLanguages();
+            const response = await buildResponse(result.cards, result.count, params, advancedInfo);
 
-            sendCachedResponse(res, {
-                cards: result.cards,
-                count: result.count,
-                page: result.page,
-                totalPages: result.totalPages,
-                randomTags,
-                languages,
-                languageMapping: LANGUAGE_MAPPING,
-                advanced: {
-                    enabled: false,
-                    fallbackReason: advancedFallbackReason || undefined
-                }
-            }, cacheKey, startTime, page);
-
+            setCache(cacheKey, response, params.page);
+            res.set('X-Cache', 'MISS');
+            res.set('X-Response-Time', `${Date.now() - startTime}ms`);
+            res.json(response);
         } catch (error) {
             log.error('Cards API error', error);
             res.status(500).json({ error: 'Failed to load cards' });
