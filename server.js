@@ -94,15 +94,7 @@ const apiLimiter = rateLimit({
 });
 
 
-// Stricter rate limiter for refresh operations - prevents abuse
-const refreshLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute window
-    max: 20, // 20 refresh operations per minute
-    message: 'Refresh rate limit exceeded. Please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1'
-});
+// Note: Refresh rate limiter moved to backend/routes/cards.js (applied to specific route)
 
 // Apply general rate limiter to all API routes
 app.use('/api/', apiLimiter);

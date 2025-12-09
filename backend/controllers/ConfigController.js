@@ -8,9 +8,34 @@ import { logger } from '../utils/logger.js';
 
 const log = logger.scoped('CONFIG');
 
+// Keys that contain sensitive information and should be redacted in API responses
+const REDACTED_KEYS = [
+    'apikey', 'apiKey', 'bearerToken', 'sessionCookie', 'csrfToken',
+    'cfClearance', 'session', 'CH-API-KEY', 'samwise'
+];
+
+/**
+ * Recursively redact sensitive keys from an object
+ */
+function redactSecrets(obj, depth = 0) {
+    if (depth > 5 || !obj || typeof obj !== 'object') return obj;
+    const result = Array.isArray(obj) ? [] : {};
+    for (const [key, value] of Object.entries(obj)) {
+        if (REDACTED_KEYS.includes(key)) {
+            result[key] = value ? '[REDACTED]' : '';
+        } else if (typeof value === 'object' && value !== null) {
+            result[key] = redactSecrets(value, depth + 1);
+        } else {
+            result[key] = value;
+        }
+    }
+    return result;
+}
+
 class ConfigController {
     getConfig = (req, res) => {
-        res.json(appConfig);
+        // Return config with sensitive fields redacted
+        res.json(redactSecrets(appConfig));
     };
 
     setConfig = async (req, res) => {

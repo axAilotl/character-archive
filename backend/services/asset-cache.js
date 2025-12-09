@@ -14,6 +14,42 @@ const __dirname = path.dirname(__filename);
 
 const CACHE_DIR = path.join(__dirname, '../../static', 'cached-assets');
 
+// Security: Allowlist of domains for asset downloads (SSRF protection)
+const ALLOWED_ASSET_DOMAINS = [
+    'chub.ai', 'www.chub.ai', 'avatars.chub.ai', 'cdn.chub.ai', 'gateway.chub.ai',
+    'realm.risuai.net', 'sv.risuai.xyz',
+    'app.wyvern.chat', 'api.wyvern.chat',
+    'character-tavern.com', 'cards.character-tavern.com',
+    'files.catbox.moe', 'i.imgur.com', 'imgur.com'
+];
+
+/**
+ * Check if a URL is allowed for asset download (SSRF protection)
+ */
+function isAssetUrlAllowed(urlString) {
+    try {
+        const url = new URL(urlString);
+        const hostname = url.hostname.toLowerCase();
+
+        // Block private/local IPs
+        if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.|localhost|::1)/i.test(hostname)) {
+            return false;
+        }
+
+        // Block metadata services (AWS, GCP, Azure)
+        if (hostname === '169.254.169.254' || hostname.endsWith('.internal')) {
+            return false;
+        }
+
+        // Check against allowlist
+        return ALLOWED_ASSET_DOMAINS.some(domain =>
+            hostname === domain || hostname.endsWith('.' + domain)
+        );
+    } catch {
+        return false;
+    }
+}
+
 // Ensure cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -338,6 +374,13 @@ export async function scanCardForUrls(cardId) {
  */
 async function downloadAsset(url, cardId, options = {}) {
     const { assetType: explicitType = null, metadata = null } = options;
+
+    // Security: Validate URL against allowlist (SSRF protection)
+    if (!isAssetUrlAllowed(url)) {
+        log.warn(`Blocked non-allowed asset URL: ${url}`);
+        return null;
+    }
+
     try {
         // Generate hash for filename
         const urlHash = crypto.createHash('md5').update(url).digest('hex');
