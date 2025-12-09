@@ -28,7 +28,7 @@ import FormData from 'form-data';
 import axios from 'axios';
 import { readCardPngSpec, getCardFilePaths, deriveFeatureFlagsFromSpec } from '../utils/card-utils.js';
 import { refreshCard } from '../services/scraper.js';
-import { refreshRisuCard } from '../services/RisuAiService.js';
+import { refreshRisuCard } from '../services/scrapers/RisuAiScraper.js';
 import {
     setCardGalleryFlag,
     setCardFavoriteFlag,

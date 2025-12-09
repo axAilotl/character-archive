@@ -16,7 +16,7 @@ import {
     loadBlacklist, 
     isBlacklisted 
 } from './ApiClient.js';
-import { syncRisuAi } from './RisuAiService.js';
+import { syncRisuAi } from './scrapers/RisuAiScraper.js';
 import { syncWyvern } from './scrapers/WyvernScraper.js';
 import { syncLinkedLorebooks } from './LorebookService.js';
 
