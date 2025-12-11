@@ -62,7 +62,7 @@ export function useFilters(
     if (sort) urlFilters.sort = sort;
     if (favorite) urlFilters.favorite = favorite as typeof urlFilters.favorite;
     if (source) {
-      if (source === "chub" || source === "ct") {
+      if (source === "chub" || source === "ct" || source === "risuai" || source === "wyvern") {
         urlFilters.source = source;
       } else {
         urlFilters.source = "all";

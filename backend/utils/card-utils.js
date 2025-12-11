@@ -12,6 +12,12 @@ export const STATIC_DIR = path.join(__dirname, '../../static');
 
 export function getCardFilePaths(cardId) {
     const cardIdStr = String(cardId);
+
+    // Security: Validate cardId is numeric only to prevent path traversal
+    if (!/^\d+$/.test(cardIdStr)) {
+        throw new Error(`Invalid card ID: ${cardIdStr}`);
+    }
+
     const subfolder = path.join(STATIC_DIR, cardIdStr.substring(0, 2));
     return {
         subfolder,

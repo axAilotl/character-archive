@@ -178,6 +178,30 @@ export async function startCtSync(signal?: AbortSignal) {
   return res.body;
 }
 
+export async function startWyvernSync(signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/api/sync/wyvern`, { signal });
+  if (!res.body) throw new Error('Failed to start Wyvern sync - no response body');
+  return res.body;
+}
+
+export async function startRisuAiSync(signal?: AbortSignal) {
+  const res = await fetch(`${API_BASE}/api/sync/risuai`, { signal });
+  if (!res.body) throw new Error('Failed to start RisuAI sync - no response body');
+  return res.body;
+}
+
+export async function cancelAllSyncs() {
+  const res = await fetch(`${API_BASE}/api/sync/cancel`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to cancel syncs');
+  return res.json();
+}
+
+export async function getSyncStatus() {
+  const res = await fetch(`${API_BASE}/api/sync/status`);
+  if (!res.ok) throw new Error('Failed to get sync status');
+  return res.json();
+}
+
 export async function scanCardAssets(cardId: string) {
   const res = await fetch(`${API_BASE}/api/cards/${cardId}/assets/scan`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to scan card assets');
@@ -311,6 +335,94 @@ export async function clearCardSync(cardId: string, platform?: string): Promise<
     : `${API_BASE}/api/federation/cards/${cardId}/sync`;
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to clear sync state');
+  return res.json();
+}
+
+// ============================================================================
+// Metrics API
+// ============================================================================
+
+export interface MetricsStats {
+  totalCards: number;
+  cardsBySource: Record<string, number>;
+  avgTokenCount: number;
+  medianTokenCount: number;
+  totalTokens: number;
+  minTokens: number;
+  maxTokens: number;
+  newCardsToday: number;
+  newCardsThisWeek: number;
+  favoritedCount: number;
+  cardsWithLorebook: number;
+  cardsWithGallery: number;
+  cardsWithExpressions: number;
+  cardsWithAlternateGreetings: number;
+  cardsWithSystemPrompt: number;
+  cardsWithExampleDialogues: number;
+  topTags: { tag: string; count: number }[];
+  largestCards: { id: number; name: string; author: string; tokenCount: number; source: string }[];
+  tokenDistribution: { label: string; count: number }[];
+  source: 'realtime' | 'snapshot';
+  computedAt?: string;
+}
+
+export interface TimelineEntry {
+  date: string;
+  count: number;
+}
+
+export async function fetchMetricsStats(realtime = false): Promise<MetricsStats> {
+  const url = `${API_BASE}/api/metrics/stats${realtime ? '?realtime=true' : ''}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch metrics');
+  return res.json();
+}
+
+export async function fetchMetricsTimeline(days = 30): Promise<TimelineEntry[]> {
+  const res = await fetch(`${API_BASE}/api/metrics/timeline?days=${days}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch timeline');
+  return res.json();
+}
+
+export async function fetchTopTags(limit = 50): Promise<{ tag: string; count: number }[]> {
+  const res = await fetch(`${API_BASE}/api/metrics/top-tags?limit=${limit}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch top tags');
+  return res.json();
+}
+
+export async function fetchTokenDistribution(): Promise<{ label: string; count: number }[]> {
+  const res = await fetch(`${API_BASE}/api/metrics/distribution`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch distribution');
+  return res.json();
+}
+
+export interface TrendingTag {
+  tag: string;
+  count: number;
+  change: number;
+  isNew: boolean;
+  rankChange?: number;
+}
+
+export async function fetchTrendingTags(limit = 20): Promise<TrendingTag[]> {
+  const res = await fetch(`${API_BASE}/api/metrics/trending-tags?limit=${limit}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch trending tags');
+  return res.json();
+}
+
+export interface TopCardByPlatform {
+  id: number;
+  name: string;
+  author: string;
+  tokenCount: number;
+  starCount: number | null;
+  nChats: number | null;
+  nMessages: number | null;
+}
+
+export async function fetchTopCardsByPlatform(limit = 5): Promise<Record<string, TopCardByPlatform[]>> {
+  const res = await fetch(`${API_BASE}/api/metrics/top-cards-by-platform?limit=${limit}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch top cards by platform');
   return res.json();
 }
 

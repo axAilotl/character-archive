@@ -1,9 +1,11 @@
 
 import { loadConfig } from '../../config.js';
 import { syncCards } from './scraper.js';
-import { syncCharacterTavern } from './ct-sync.js';
+import { syncCharacterTavern } from './scrapers/CtScraper.js';
 import { drainSearchIndexQueue, isSearchIndexEnabled } from './search-index.js';
+import { computeDailySnapshot } from './MetricsService.js';
 import { lockService } from './LockService.js';
+import { getDatabase } from '../database.js';
 import { logger } from '../utils/logger.js';
 
 const log = logger.scoped('SCHEDULER');
@@ -14,9 +16,12 @@ class SchedulerService {
         this.ctAutoUpdateTimer = null;
         this.searchIndexRefreshTimer = null;
         this.searchIndexQueueTimer = null;
-        
+        this.metricsSnapshotTimer = null;
+        this.walCheckpointTimer = null;
+
         this.SEARCH_INDEX_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
         this.SEARCH_INDEX_QUEUE_INTERVAL_MS = 5000;
+        this.WAL_CHECKPOINT_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
     }
 
     startAutoUpdate() {
@@ -115,6 +120,111 @@ class SchedulerService {
         this.searchIndexQueueTimer = setInterval(() => {
             drainSearchIndexQueue('interval');
         }, this.SEARCH_INDEX_QUEUE_INTERVAL_MS);
+    }
+
+    /**
+     * Start the daily metrics snapshot scheduler
+     * Computes a snapshot at midnight every day
+     */
+    startMetricsSnapshotScheduler() {
+        if (this.metricsSnapshotTimer) {
+            clearTimeout(this.metricsSnapshotTimer);
+            this.metricsSnapshotTimer = null;
+        }
+
+        const scheduleNextSnapshot = () => {
+            const now = new Date();
+            const midnight = new Date(now);
+            midnight.setDate(midnight.getDate() + 1);
+            midnight.setHours(0, 0, 0, 0);
+
+            const msUntilMidnight = midnight.getTime() - now.getTime();
+
+            log.info(`Next metrics snapshot scheduled in ${Math.round(msUntilMidnight / 1000 / 60)} minutes`);
+
+            this.metricsSnapshotTimer = setTimeout(() => {
+                try {
+                    log.info('Computing daily metrics snapshot...');
+                    computeDailySnapshot();
+                    log.info('Daily metrics snapshot completed');
+                    this.cleanupOldSnapshots();
+                } catch (error) {
+                    log.error('Failed to compute daily metrics snapshot', error);
+                }
+                // Schedule the next one
+                scheduleNextSnapshot();
+            }, msUntilMidnight);
+        };
+
+        // Compute an initial snapshot if we don't have one for today
+        try {
+            computeDailySnapshot();
+            log.info('Initial metrics snapshot computed');
+        } catch (error) {
+            log.error('Failed to compute initial metrics snapshot', error);
+        }
+
+        // Run initial cleanup
+        this.cleanupOldSnapshots();
+
+        scheduleNextSnapshot();
+    }
+
+    /**
+     * Delete metrics snapshots older than 90 days
+     */
+    cleanupOldSnapshots() {
+        try {
+            const db = getDatabase();
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 90);
+            const cutoffStr = cutoffDate.toISOString().split('T')[0];
+
+            const result = db.prepare(
+                'DELETE FROM metrics_snapshots WHERE snapshot_date < ?'
+            ).run(cutoffStr);
+
+            if (result.changes > 0) {
+                log.info(`Cleaned up ${result.changes} metrics snapshot(s) older than 90 days`);
+            }
+        } catch (error) {
+            log.error('Failed to cleanup old metrics snapshots', error);
+        }
+    }
+
+    /**
+     * Start periodic WAL checkpoint to prevent WAL file from growing too large
+     * Runs every hour to truncate the WAL file
+     */
+    startWalCheckpointScheduler() {
+        if (this.walCheckpointTimer) {
+            clearInterval(this.walCheckpointTimer);
+            this.walCheckpointTimer = null;
+        }
+
+        // Run initial checkpoint
+        this.runWalCheckpoint();
+
+        // Schedule periodic checkpoints
+        this.walCheckpointTimer = setInterval(() => {
+            this.runWalCheckpoint();
+        }, this.WAL_CHECKPOINT_INTERVAL_MS);
+
+        log.info('WAL checkpoint scheduler started (every 1 hour)');
+    }
+
+    /**
+     * Run a WAL checkpoint to truncate the WAL file
+     */
+    runWalCheckpoint() {
+        try {
+            const db = getDatabase();
+            const result = db.pragma('wal_checkpoint(TRUNCATE)');
+            const [{ busy, log: walLog, checkpointed }] = result;
+            log.info(`WAL checkpoint: busy=${busy}, log=${walLog}, checkpointed=${checkpointed}`);
+        } catch (error) {
+            log.error('WAL checkpoint failed', error);
+        }
     }
 }
 

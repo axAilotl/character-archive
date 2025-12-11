@@ -10,15 +10,16 @@ import { hasEmbeddedImages as checkForEmbeddedImages } from '../utils/card-utils
 import { upsertCard, getDatabase } from '../database.js';
 import { resolveTokenCountsFromMetadata, mergeTokenCounts } from '../utils/token-counts.js';
 import { logger } from '../utils/logger.js';
-import { 
-    createChubClient, 
-    rateLimitedRequest, 
-    loadBlacklist, 
-    isBlacklisted 
+import {
+    createChubClient,
+    rateLimitedRequest,
+    loadBlacklist,
+    isBlacklisted
 } from './ApiClient.js';
-import { syncRisuAi } from './RisuAiService.js';
-import { syncWyvern } from './WyvernService.js';
+import { syncRisuAi } from './scrapers/RisuAiScraper.js';
+import { syncWyvern } from './scrapers/WyvernScraper.js';
 import { syncLinkedLorebooks } from './LorebookService.js';
+import { lockService } from './LockService.js';
 
 const scraperLogger = logger.scoped('SCRAPER');
 
@@ -1111,6 +1112,13 @@ export async function syncCards(config, progressCallback = null) {
         scraperLogger.info('Using timeline mode');
         
         while (currentPage <= maxPage) {
+            // Check for abort
+            if (lockService.isSyncAborted()) {
+                scraperLogger.info('Chub sync aborted by user (timeline)');
+                progressCallback?.({ progress: 100, currentCard: 'Sync cancelled', newCards, cancelled: true });
+                return { newCards, cancelled: true };
+            }
+
             try {
                 const url = `https://gateway.chub.ai/api/timeline/v1?page=${currentPage}&count=true`;
                 const response = await rateLimitedRequest(url, { headers: client.defaults.headers });
@@ -1176,8 +1184,8 @@ export async function syncCards(config, progressCallback = null) {
             }
         }
     } 
-    // Regular search mode
-    else if (!config.followedCreatorsOnly && config.syncTagsMode) {
+    // Regular search mode - runs when syncTagsMode is on OR syncByNew is set (default fallback)
+    else if (!config.followedCreatorsOnly && (config.syncTagsMode || config.syncByNew || !config.use_timeline)) {
         const sortBy = config.syncByNew ? 'created_at' : 'last_activity_at';
         const baseParams = {
             search: '',
@@ -1201,6 +1209,12 @@ export async function syncCards(config, progressCallback = null) {
         const runPagesForTag = async (tagLabel, tagValue) => {
             let page = startPage;
             while (page <= maxPage) {
+                // Check for abort
+                if (lockService.isSyncAborted()) {
+                    scraperLogger.info('Chub sync aborted by user (search)');
+                    return;
+                }
+
                 try {
                     const params = { ...baseParams, page };
                     if (tagValue) params.topics = tagValue;
@@ -1264,10 +1278,21 @@ export async function syncCards(config, progressCallback = null) {
         const creatorsToProcess = followedCreators;
 
         for (const username of creatorsToProcess) {
+            // Check for abort
+            if (lockService.isSyncAborted()) {
+                scraperLogger.info('Chub sync aborted by user (followed creators)');
+                break;
+            }
+
             scraperLogger.info(`Processing followed creator '${username}'.`);
             let page = startPage;
 
             while (page <= maxPage) {
+                // Check for abort
+                if (lockService.isSyncAborted()) {
+                    break;
+                }
+
                 try {
                     const params = {
                         first: syncLimit,

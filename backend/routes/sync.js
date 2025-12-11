@@ -1,6 +1,7 @@
 
 import express from 'express';
 import { syncController } from '../controllers/SyncController.js';
+import { lockService } from '../services/LockService.js';
 import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
@@ -19,7 +20,19 @@ const syncLimiter = rateLimit({
 router.get('/', syncLimiter, syncController.syncCards);
 router.get('/cards', syncLimiter, syncController.syncCards);
 router.get('/ct', syncLimiter, syncController.syncCharacterTavern);
+router.get('/wyvern', syncLimiter, syncController.syncWyvern);
+router.get('/risuai', syncLimiter, syncController.syncRisuAi);
 router.post('/favorites', syncController.syncFavoritesToChub);
 router.get('/chub/follows', syncController.getChubFollows);
+
+// Sync status and cancel endpoints
+router.get('/status', (req, res) => {
+    res.json(lockService.getSyncStatus());
+});
+
+router.post('/cancel', (req, res) => {
+    lockService.abortAllSyncs();
+    res.json({ success: true, message: 'Sync cancellation requested' });
+});
 
 export default router;

@@ -16,21 +16,21 @@ class ConfigController {
     setConfig = async (req, res) => {
         try {
             const newConfig = { ...appConfig, ...req.body };
-            
+
             if (newConfig.use_timeline && !newConfig.apikey) {
                 return res.status(400).json({ error: 'use_timeline requires a valid API key' });
             }
-            
+
             saveConfig(newConfig);
-            
+
             // Mutate the singleton to update all references
             Object.assign(appConfig, newConfig);
-            
+
             sillyTavernService.resetCache();
-            
+
             configureSearchIndex(appConfig.meilisearch);
             configureVectorSearch(appConfig.vectorSearch || {});
-            
+
             schedulerService.startSearchIndexScheduler();
             if (isSearchIndexEnabled()) {
                 drainSearchIndexQueue('config-update');
@@ -39,7 +39,7 @@ class ConfigController {
             // Restart auto-update if settings changed
             schedulerService.startAutoUpdate();
             schedulerService.startCtAutoUpdate();
-            
+
             res.json({ message: 'Successfully updated the config' });
         } catch (error) {
             log.error('Set config error', error);

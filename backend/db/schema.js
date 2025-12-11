@@ -152,6 +152,18 @@ export function ensureSchema(db) {
 
         CREATE INDEX IF NOT EXISTS idx_card_chunk_map_card ON card_chunk_map(cardId);
         CREATE INDEX IF NOT EXISTS idx_card_chunk_map_section ON card_chunk_map(section);
+
+        CREATE TABLE IF NOT EXISTS metrics_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_date TEXT NOT NULL,
+            metric_type TEXT NOT NULL,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(snapshot_date, metric_type)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_metrics_snapshots_date ON metrics_snapshots(snapshot_date);
+        CREATE INDEX IF NOT EXISTS idx_metrics_snapshots_type ON metrics_snapshots(metric_type);
     `);
 
     addColumnIfMissing(db, 'cached_assets', 'metadata', 'TEXT');

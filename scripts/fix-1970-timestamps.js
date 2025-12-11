@@ -6,7 +6,7 @@
  * We'll use createdAt as the lastModified fallback
  */
 
-import { initDatabase, getDatabase } from '../database.js';
+import { initDatabase, getDatabase } from '../backend/database.js';
 
 async function main() {
   initDatabase();
