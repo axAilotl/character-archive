@@ -2,7 +2,7 @@
 
 import { MeiliSearch } from 'meilisearch';
 import { loadConfig } from '../config.js';
-import { initDatabase, getDatabase } from '../database.js';
+import { initDatabase, getDatabase } from '../backend/database.js';
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

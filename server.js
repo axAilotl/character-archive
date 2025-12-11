@@ -16,6 +16,7 @@ import syncRouter from './backend/routes/sync.js';
 import adminRouter from './backend/routes/admin.js';
 import tagRouter from './backend/routes/tags.js';
 import federationRouter from './backend/routes/federation.js';
+import metricsRouter from './backend/routes/metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -168,6 +169,7 @@ app.get('/api/chub/follows', (req, res) => res.redirect(307, '/api/sync/chub/fol
 
 app.use('/api/tags', tagRouter);
 app.use('/api/federation', federationRouter);
+app.use('/api/metrics', metricsRouter);
 
 app.get('/reroll-tags', (req, res) => res.redirect(307, '/api/tags/random'));
 app.get('/api/tag-aliases', (req, res) => res.redirect(307, '/api/tags/aliases'));
@@ -197,6 +199,8 @@ app.listen(PORT, HOST, () => {
     schedulerService.startAutoUpdate();
     schedulerService.startCtAutoUpdate();
     schedulerService.startSearchIndexScheduler();
+    schedulerService.startMetricsSnapshotScheduler();
+    schedulerService.startWalCheckpointScheduler();
 });
 
 export default app;

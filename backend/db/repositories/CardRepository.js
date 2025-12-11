@@ -67,38 +67,52 @@ function sanitizeCtPath(value = '') {
     return value.trim().replace(/^\/+/, '');
 }
 
-function buildCtSourceUrl(pathPart = '', idPart = '') {
-    const sanitizedPath = sanitizeCtPath(pathPart);
-    if (sanitizedPath) {
-        return `https://character-tavern.com/character/${sanitizedPath}`;
+// Source URL configuration - maps source names to URL builders
+const SOURCE_URL_CONFIG = {
+    ct: {
+        domain: 'character-tavern.com',
+        buildUrl: ({ sourcePath, sourceId, fullPath }) => {
+            const pathPart = sanitizeCtPath(sourcePath || fullPath || '');
+            if (pathPart) {
+                return `https://character-tavern.com/character/${pathPart}`;
+            }
+            const idPart = sanitizeCtPath(sourceId || '');
+            if (idPart) {
+                return `https://character-tavern.com/character/${idPart}`;
+            }
+            return '';
+        }
+    },
+    risuai: {
+        domain: 'risuai.net',
+        buildUrl: ({ sourceId }) => sourceId ? `https://realm.risuai.net/character/${sourceId}` : ''
+    },
+    wyvern: {
+        domain: 'wyvern.chat',
+        buildUrl: ({ sourceId }) => sourceId ? `https://app.wyvern.chat/characters/${sourceId}` : ''
+    },
+    chub: {
+        domain: 'chub.ai',
+        buildUrl: ({ fullPath }) => fullPath ? `https://chub.ai/characters/${fullPath}` : ''
     }
-    const fallbackId = sanitizeCtPath(idPart);
-    if (fallbackId) {
-        return `https://character-tavern.com/character/${fallbackId}`;
-    }
-    return '';
-}
+};
 
 function resolveSourceUrlValue({ source, sourceUrl, sourcePath, sourceId, fullPath } = {}) {
-    if (source === 'ct') {
-        const ctUrl = buildCtSourceUrl(sourcePath || fullPath || '', sourceId || '');
-        if (ctUrl) {
-            return ctUrl;
-        }
-        if (sourceUrl && sourceUrl.includes('character-tavern.com')) {
+    const config = SOURCE_URL_CONFIG[source];
+
+    if (config) {
+        // Check if existing sourceUrl matches the expected domain
+        if (sourceUrl && sourceUrl.includes(config.domain)) {
             return sourceUrl;
+        }
+        // Build URL from source-specific logic
+        const builtUrl = config.buildUrl({ sourcePath, sourceId, fullPath });
+        if (builtUrl) {
+            return builtUrl;
         }
     }
 
-    if (source === 'risuai') {
-        if (sourceUrl && sourceUrl.includes('risuai.net')) {
-            return sourceUrl;
-        }
-        if (sourceId) {
-            return `https://realm.risuai.net/character/${sourceId}`;
-        }
-    }
-
+    // Fallback: use provided sourceUrl or default to chub
     if (sourceUrl) {
         return sourceUrl;
     }
@@ -260,7 +274,7 @@ export function upsertCard(metadata) {
         metadata.tokenFirstMessageCount ?? null,
         metadata.tokenSystemPromptCount ?? null,
         metadata.tokenPostHistoryCount ?? null,
-        (metadata.lastActivityAt || '1970-01-01T00:00:00').replace('T', ' ').split('.')[0],
+        (metadata.lastActivityAt || metadata.lastModified || '1970-01-01T00:00:00').replace('T', ' ').split('.')[0],
         (metadata.createdAt || '1970-01-01T00:00:00').replace('T', ' ').split('.')[0]
     ];
 

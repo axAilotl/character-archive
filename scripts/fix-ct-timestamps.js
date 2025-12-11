@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { initDatabase, getDatabase } from '../database.js';
+import { initDatabase, getDatabase } from '../backend/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,6 +69,8 @@ async function main() {
         metadata.createdAt,
       ];
       const updatedCandidates = [
+        metadata.lastModified,
+        metadata.lastActivityAt,
         metadata.lastUpdateAtRaw,
         rawHit?.lastUpdateAt,
         rawHit?.updatedAt,

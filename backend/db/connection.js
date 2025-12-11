@@ -25,7 +25,7 @@ export function createConnection(databaseFile) {
         db.pragma('foreign_keys = ON');
         db.pragma('cache_size = -64000');  // 64MB cache
         db.pragma('temp_store = MEMORY');
-        db.pragma('mmap_size = 30000000000');  // 30GB memory map
+        db.pragma('mmap_size = 2147483648');  // 2GB memory map (was 30GB, risked OOM)
 
         return db;
     } catch (error) {

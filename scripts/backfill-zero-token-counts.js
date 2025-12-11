@@ -1,5 +1,5 @@
-import { initDatabase, getDatabase } from '../database.js';
-import { resolveTokenCountsFromMetadata } from '../token-counts.js';
+import { initDatabase, getDatabase } from '../backend/database.js';
+import { resolveTokenCountsFromMetadata } from '../backend/utils/token-counts.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

@@ -88,7 +88,13 @@ function HomeContent() {
 
   // Sync management
   const sync = useSync(loadCards);
-  const { syncing, syncStatus, ctSyncing, ctSyncStatus, startChubSync: startSyncing, startCtSync: startCtSyncing } = sync;
+  const {
+    syncing, syncStatus, startChubSync: startSyncing,
+    ctSyncing, ctSyncStatus, startCtSync: startCtSyncing,
+    wyvernSyncing, wyvernSyncStatus, startWyvernSync,
+    risuSyncing, risuSyncStatus, startRisuSync,
+    anySyncing, cancelAllSyncs,
+  } = sync;
 
   // Computed values
   const hasFollowedCreators = useMemo(() => (config?.followedCreators?.length || 0) > 0, [config?.followedCreators]);
@@ -504,7 +510,22 @@ function HomeContent() {
         defaultSillyTavernState={defaultSillyTavernState}
         defaultCtSyncState={defaultCtSyncState}
         defaultVectorSearchState={defaultVectorSearchState}
+        // Sync test functions
+        startChubSync={startSyncing}
+        chubSyncing={syncing}
+        chubSyncStatus={syncStatus}
+        startCtSync={startCtSyncing}
+        ctSyncing={ctSyncing}
+        ctSyncStatus={ctSyncStatus}
+        startWyvernSync={startWyvernSync}
+        wyvernSyncing={wyvernSyncing}
+        wyvernSyncStatus={wyvernSyncStatus}
+        startRisuSync={startRisuSync}
+        risuSyncing={risuSyncing}
+        risuSyncStatus={risuSyncStatus}
         defaultWyvernSyncState={defaultWyvernSyncState}
+        anySyncing={anySyncing}
+        cancelAllSyncs={cancelAllSyncs}
       />
       <FederationModal
         show={showFederation}

@@ -76,7 +76,8 @@ interface UseCardActionsResult {
   handleCopyLink: (card: Card) => void;
   handlePushToSilly: (card: Card, canPush: boolean, onCacheAssets?: () => void) => Promise<void>;
   handlePushToArchitect: (card: Card, canPush: boolean) => Promise<void>;
-  getChubUrl: (card: Card) => string | null;
+  getSourceUrl: (card: Card) => string | null;
+  getChubUrl: (card: Card) => string | null;  // Alias for backwards compatibility
   formatTokenKey: (key: string) => string;
 }
 
@@ -485,21 +486,28 @@ export function useCardActions(): UseCardActionsResult {
     }
   }, []);
 
-  const getChubUrl = useCallback((card: Card) => {
-    if (card.source === "ct" && card.sourceUrl) {
+  /**
+   * Get the source URL for a card (to view on original platform)
+   * Works for all sources: Chub, CT, RisuAI, Wyvern
+   */
+  const getSourceUrl = useCallback((card: Card) => {
+    // All scrapers now set sourceUrl - use it if available
+    if (card.sourceUrl) {
       return card.sourceUrl;
     }
-    if (card.source === "risuai" && card.sourceUrl) {
-      return card.sourceUrl;
-    }
+    // Fallback for legacy Chub cards without sourceUrl
     if (card.fullPath) {
       return `https://chub.ai/characters/${card.fullPath}`;
     }
+    // Last resort fallback
     if (card.silly_link) {
       return card.silly_link;
     }
     return null;
   }, []);
+
+  // Alias for backwards compatibility
+  const getChubUrl = getSourceUrl;
 
   const formatTokenKey = useCallback((key: string) =>
     key
@@ -526,6 +534,7 @@ export function useCardActions(): UseCardActionsResult {
     handleCopyLink,
     handlePushToSilly,
     handlePushToArchitect,
+    getSourceUrl,
     getChubUrl,
     formatTokenKey,
   };

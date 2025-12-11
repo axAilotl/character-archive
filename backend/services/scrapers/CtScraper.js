@@ -293,6 +293,7 @@ export class CtScraper extends BaseScraper {
             tokenSystemPromptCount: null,
             tokenPostHistoryCount: null,
             lastModified: lastUpdateSql,
+            lastActivityAt: lastUpdateSql,
             createdAt: createdAtSql,
             nChats: hit.views || 0,
             nMessages: hit.messages || 0,

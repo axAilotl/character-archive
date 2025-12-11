@@ -21,6 +21,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDatabase, upsertCard } from '../../database.js';
 import { logger } from '../../utils/logger.js';
+import { lockService } from '../LockService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -431,6 +432,21 @@ export class BaseScraper {
         });
 
         while (hasMore && page <= pageLimit) {
+            // Check for abort (main sync or CT sync depending on source)
+            const isAborted = this.source === 'ct'
+                ? lockService.isCtSyncAborted()
+                : lockService.isSyncAborted();
+            if (isAborted) {
+                this.log.info(`${this.displayName} sync aborted by user`);
+                this.reportProgress(progressCallback, {
+                    progress: 100,
+                    currentCard: `[${this.displayName}] Sync cancelled`,
+                    newCards,
+                    cancelled: true
+                });
+                break;
+            }
+
             this.log.info(`Fetching page ${page}/${pageLimit}`);
 
             const items = await this.fetchList(page, config);
@@ -444,6 +460,15 @@ export class BaseScraper {
             this.log.info(`Processing ${items.length} cards from page ${page}`);
 
             for (const item of items) {
+                // Check for abort before each card
+                const isAbortedMid = this.source === 'ct'
+                    ? lockService.isCtSyncAborted()
+                    : lockService.isSyncAborted();
+                if (isAbortedMid) {
+                    this.log.info(`${this.displayName} sync aborted by user (mid-page)`);
+                    break;
+                }
+
                 const result = await this.processCard(item, config);
 
                 if (result.success) {

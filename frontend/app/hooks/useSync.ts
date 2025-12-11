@@ -1,175 +1,237 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { startSync as startSyncApi, startCtSync as startCtSyncApi } from "@/lib/api";
+import {
+  startSync as startSyncApi,
+  startCtSync as startCtSyncApi,
+  startWyvernSync as startWyvernSyncApi,
+  startRisuAiSync as startRisuAiSyncApi,
+  cancelAllSyncs as cancelAllSyncsApi,
+  getSyncStatus as getSyncStatusApi
+} from "@/lib/api";
 
-interface UseSyncResult {
+interface SyncSourceState {
   syncing: boolean;
-  syncStatus: string | null;
-  ctSyncing: boolean;
-  ctSyncStatus: string | null;
-  startChubSync: () => Promise<void>;
-  startCtSync: () => Promise<void>;
-  cancelChubSync: () => void;
-  cancelCtSync: () => void;
+  status: string | null;
+  start: () => Promise<void>;
+  cancel: () => void;
 }
 
+interface UseSyncResult {
+  // Chub sync
+  syncing: boolean;
+  syncStatus: string | null;
+  startChubSync: () => Promise<void>;
+  cancelChubSync: () => void;
+  // CT sync
+  ctSyncing: boolean;
+  ctSyncStatus: string | null;
+  startCtSync: () => Promise<void>;
+  cancelCtSync: () => void;
+  // Wyvern sync
+  wyvernSyncing: boolean;
+  wyvernSyncStatus: string | null;
+  startWyvernSync: () => Promise<void>;
+  cancelWyvernSync: () => void;
+  // RisuAI sync
+  risuSyncing: boolean;
+  risuSyncStatus: string | null;
+  startRisuSync: () => Promise<void>;
+  cancelRisuSync: () => void;
+  // Global
+  anySyncing: boolean;
+  cancelAllSyncs: () => void;
+}
+
+type SyncApiFunction = (signal: AbortSignal) => Promise<ReadableStream<Uint8Array> | null>;
+
 /**
- * Custom hook for managing Chub and Character Tavern sync operations
- * Handles SSE streams, AbortControllers, and sync progress status
+ * Generic hook for managing a single sync source
  */
-export function useSync(onSyncComplete?: () => void): UseSyncResult {
+function useSyncSource(
+  sourceName: string,
+  apiFunc: SyncApiFunction,
+  onComplete?: () => void
+): SyncSourceState {
   const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [ctSyncing, setCtSyncing] = useState(false);
-  const [ctSyncStatus, setCtSyncStatus] = useState<string | null>(null);
-  const syncAbortRef = useRef<AbortController | null>(null);
-  const ctSyncAbortRef = useRef<AbortController | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Cancel Chub sync
-  const cancelChubSync = useCallback(() => {
-    if (syncAbortRef.current) {
-      syncAbortRef.current.abort();
-      syncAbortRef.current = null;
+  const cancel = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
   }, []);
 
-  // Cancel CT sync
-  const cancelCtSync = useCallback(() => {
-    if (ctSyncAbortRef.current) {
-      ctSyncAbortRef.current.abort();
-      ctSyncAbortRef.current = null;
+  const processSSEStream = useCallback(async (stream: ReadableStream<Uint8Array>) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const chunk = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        if (chunk.startsWith("data:")) {
+          const payload = JSON.parse(chunk.replace("data: ", ""));
+          if (payload.error) {
+            setStatus(`Error: ${payload.error}`);
+          } else if (payload.progress === 100) {
+            setStatus(`${sourceName} sync complete. New cards: ${payload.newCards ?? payload.added ?? 0}`);
+            if (onComplete) {
+              onComplete();
+            }
+          } else {
+            const progress = payload.progress ?? 0;
+            const current = payload.currentCard ?? payload.name ?? '';
+            const newCards = payload.newCards ?? payload.added ?? 0;
+            setStatus(`${sourceName}: ${progress}% • ${current} (${newCards} new)`);
+          }
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
     }
-  }, []);
+    reader.releaseLock();
+  }, [sourceName, onComplete]);
 
-  // Start Chub sync with SSE stream
-  const startChubSync = useCallback(async () => {
-    // Abort any existing sync
-    cancelChubSync();
-
+  const start = useCallback(async () => {
+    cancel();
     const controller = new AbortController();
-    syncAbortRef.current = controller;
-
-    setSyncStatus(null);
+    abortRef.current = controller;
+    setStatus(null);
     setSyncing(true);
     try {
-      const stream = await startSyncApi(controller.signal);
-      if (!stream) return;
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary !== -1) {
-          const chunk = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          if (chunk.startsWith("data:")) {
-            const payload = JSON.parse(chunk.replace("data: ", ""));
-            if (payload.error) {
-              setSyncStatus(`Error: ${payload.error}`);
-            } else if (payload.progress === 100) {
-              setSyncStatus(`Sync complete. New cards: ${payload.newCards}`);
-              // Trigger reload callback if provided
-              if (onSyncComplete) {
-                onSyncComplete();
-              }
-            } else {
-              setSyncStatus(`Progress ${payload.progress ?? 0}% • ${payload.currentCard ?? ""}`);
-            }
-          }
-          boundary = buffer.indexOf("\n\n");
-        }
+      const stream = await apiFunc(controller.signal);
+      if (stream) {
+        await processSSEStream(stream);
       }
-      reader.releaseLock();
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        setSyncStatus("Sync cancelled");
+        setStatus(`${sourceName} sync cancelled`);
       } else {
         console.error(err);
-        setSyncStatus(err.message || "Sync failed");
+        setStatus(err?.message || `Unable to sync from ${sourceName}`);
       }
     } finally {
       setSyncing(false);
-      syncAbortRef.current = null;
+      abortRef.current = null;
     }
-  }, [cancelChubSync, onSyncComplete]);
+  }, [cancel, apiFunc, processSSEStream, sourceName]);
 
-  // Start Character Tavern sync with SSE stream
-  const startCtSync = useCallback(async () => {
-    // Abort any existing CT sync
-    cancelCtSync();
-
-    const controller = new AbortController();
-    ctSyncAbortRef.current = controller;
-
-    setCtSyncStatus(null);
-    setCtSyncing(true);
-    try {
-      const stream = await startCtSyncApi(controller.signal);
-      if (!stream) return;
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary !== -1) {
-          const chunk = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          if (chunk.startsWith("data:")) {
-            const payload = JSON.parse(chunk.replace("data: ", ""));
-            if (payload.error) {
-              setCtSyncStatus(`Error: ${payload.error}`);
-            } else if (payload.progress === 100) {
-              setCtSyncStatus(`CT sync complete. New cards: ${payload.newCards}`);
-            } else {
-              setCtSyncStatus(
-                `CT sync in progress (${payload.added || payload.newCards || 0} new / ${payload.processed || 0} processed)`,
-              );
-            }
-          }
-          boundary = buffer.indexOf("\n\n");
-        }
-      }
-      reader.releaseLock();
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        setCtSyncStatus("CT sync cancelled");
-      } else {
-        console.error(err);
-        setCtSyncStatus(err?.message || "Unable to sync from Character Tavern");
-      }
-    } finally {
-      setCtSyncing(false);
-      ctSyncAbortRef.current = null;
-    }
-  }, [cancelCtSync]);
-
-  // Cleanup on unmount - abort any running syncs
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (syncAbortRef.current) {
-        syncAbortRef.current.abort();
-        syncAbortRef.current = null;
-      }
-      if (ctSyncAbortRef.current) {
-        ctSyncAbortRef.current.abort();
-        ctSyncAbortRef.current = null;
-      }
+      abortRef.current?.abort();
     };
   }, []);
 
+  return { syncing, status, start, cancel };
+}
+
+/**
+ * Custom hook for managing sync operations for all sources
+ * Handles SSE streams, AbortControllers, and sync progress status
+ */
+export function useSync(onSyncComplete?: () => void): UseSyncResult {
+  // Create sync sources using the generic hook
+  const chub = useSyncSource("Chub", startSyncApi, onSyncComplete);
+  const ct = useSyncSource("CT", startCtSyncApi, onSyncComplete);
+  const wyvern = useSyncSource("Wyvern", startWyvernSyncApi, onSyncComplete);
+  const risu = useSyncSource("RisuAI", startRisuAiSyncApi, onSyncComplete);
+
+  // Cancel all syncs at once - calls backend to stop + aborts frontend streams
+  const cancelAllSyncs = useCallback(async () => {
+    try {
+      await cancelAllSyncsApi();
+    } catch (err) {
+      console.error('Failed to cancel syncs on backend:', err);
+    }
+    chub.cancel();
+    ct.cancel();
+    wyvern.cancel();
+    risu.cancel();
+  }, [chub.cancel, ct.cancel, wyvern.cancel, risu.cancel]);
+
+  // Computed: is any sync currently running (locally initiated)?
+  const anySyncingLocal = chub.syncing || ct.syncing || wyvern.syncing || risu.syncing;
+
+  // Track backend sync status (for syncs started elsewhere or before page load)
+  const [backendSyncStatus, setBackendSyncStatus] = useState<{
+    chub: { inProgress: boolean };
+    ct: { inProgress: boolean };
+    wyvern: { inProgress: boolean };
+    risuai: { inProgress: boolean };
+  } | null>(null);
+
+  // Poll backend status only when a sync is active
+  useEffect(() => {
+    // Skip polling if no sync is running
+    if (!anySyncingLocal && !backendSyncStatus?.chub?.inProgress &&
+        !backendSyncStatus?.ct?.inProgress && !backendSyncStatus?.wyvern?.inProgress &&
+        !backendSyncStatus?.risuai?.inProgress) {
+      // Do one initial check when component mounts
+      const checkOnce = async () => {
+        try {
+          const status = await getSyncStatusApi();
+          setBackendSyncStatus(status);
+        } catch {
+          // Ignore errors
+        }
+      };
+      checkOnce();
+      return;
+    }
+
+    const checkStatus = async () => {
+      try {
+        const status = await getSyncStatusApi();
+        setBackendSyncStatus(status);
+      } catch {
+        // Ignore errors
+      }
+    };
+
+    // Check immediately
+    checkStatus();
+
+    // Poll every 2 seconds only while sync is active
+    const interval = setInterval(checkStatus, 2000);
+    return () => clearInterval(interval);
+  }, [anySyncingLocal, backendSyncStatus?.chub?.inProgress, backendSyncStatus?.ct?.inProgress,
+      backendSyncStatus?.wyvern?.inProgress, backendSyncStatus?.risuai?.inProgress]);
+
+  // Any sync running (local or backend)
+  const anySyncing = anySyncingLocal ||
+    backendSyncStatus?.chub?.inProgress ||
+    backendSyncStatus?.ct?.inProgress ||
+    backendSyncStatus?.wyvern?.inProgress ||
+    backendSyncStatus?.risuai?.inProgress;
+
   return {
-    syncing,
-    syncStatus,
-    ctSyncing,
-    ctSyncStatus,
-    startChubSync,
-    startCtSync,
-    cancelChubSync,
-    cancelCtSync,
+    // Chub
+    syncing: chub.syncing,
+    syncStatus: chub.status,
+    startChubSync: chub.start,
+    cancelChubSync: chub.cancel,
+    // CT
+    ctSyncing: ct.syncing,
+    ctSyncStatus: ct.status,
+    startCtSync: ct.start,
+    cancelCtSync: ct.cancel,
+    // Wyvern
+    wyvernSyncing: wyvern.syncing,
+    wyvernSyncStatus: wyvern.status,
+    startWyvernSync: wyvern.start,
+    cancelWyvernSync: wyvern.cancel,
+    // RisuAI
+    risuSyncing: risu.syncing,
+    risuSyncStatus: risu.status,
+    startRisuSync: risu.start,
+    cancelRisuSync: risu.cancel,
+    // Global
+    anySyncing,
+    cancelAllSyncs,
   };
 }

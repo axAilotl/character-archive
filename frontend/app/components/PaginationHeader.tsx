@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   BookmarkPlus,
   Database,
   Loader2,
@@ -8,6 +9,7 @@ import {
   Settings,
   Sun,
 } from "lucide-react";
+import Link from "next/link";
 import { PaginationControls } from "./PaginationControls";
 
 interface PaginationHeaderProps {
@@ -104,6 +106,14 @@ export function PaginationHeader({
           >
             <Network className="h-4 w-4" />
           </button>
+          <Link
+            href="/metrics"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            aria-label="Metrics"
+            title="Archive Metrics"
+          >
+            <BarChart3 className="h-4 w-4" />
+          </Link>
           <button
             type="button"
             onClick={onOpenSettings}
