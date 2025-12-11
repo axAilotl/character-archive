@@ -30,3 +30,10 @@ GEMINI.md
 test-output/
 AGENTS.md
 internal/
+docs/internal/
+
+# Claude/AI planning files
+CLAUDE.md
+*_TODO.md
+*_PLAN.md
+*_CODE_REVIEW.md
