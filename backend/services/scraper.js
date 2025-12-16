@@ -6,7 +6,7 @@ import extractChunks from 'png-chunks-extract';
 import encodeChunks from 'png-chunks-encode';
 import textChunk from 'png-chunk-text';
 import { analyzePng, analyzeExistingPng, isPngSuspect, detectFuzzPattern } from '../utils/png-utils.js';
-import { hasEmbeddedImages as checkForEmbeddedImages } from '../utils/card-utils.js';
+import { countImages } from '@character-foundry/image-utils';
 import { upsertCard, getDatabase } from '../database.js';
 import { resolveTokenCountsFromMetadata, mergeTokenCounts } from '../utils/token-counts.js';
 import { logger } from '../utils/logger.js';
@@ -18,6 +18,7 @@ import {
 } from './ApiClient.js';
 import { syncRisuAi } from './scrapers/RisuAiScraper.js';
 import { syncWyvern } from './scrapers/WyvernScraper.js';
+import { syncCharacterTavern } from './scrapers/CtScraper.js';
 import { syncLinkedLorebooks } from './LorebookService.js';
 import { lockService } from './LockService.js';
 
@@ -393,7 +394,7 @@ export async function downloadCard(card, config, options = {}) {
 
     const existingMetadata = await readJsonIfExists(jsonPath);
 
-    const client = createChubClient(config.apikey);
+    const client = createChubClient(config.chubApiKey);
     const db = getDatabase();
 
     let cachedGalleryCount = 0;
@@ -818,10 +819,10 @@ export async function downloadCard(card, config, options = {}) {
                 hasGallery = true;
             }
 
-            if (cardData.first_mes && checkForEmbeddedImages(cardData.first_mes)) {
+            if (cardData.first_mes && countImages(cardData.first_mes) > 0) {
                 hasEmbeddedImages = true;
             } else if (Array.isArray(cardData.alternate_greetings)) {
-                if (cardData.alternate_greetings.some(g => typeof g === 'string' && checkForEmbeddedImages(g))) {
+                if (cardData.alternate_greetings.some(g => typeof g === 'string' && countImages(g) > 0)) {
                     hasEmbeddedImages = true;
                 }
             }
@@ -1043,7 +1044,7 @@ export async function downloadCard(card, config, options = {}) {
 export async function refreshCard(cardId, config) {
     // Ensure blacklist is loaded so refresh respects skip list
     loadBlacklist();
-    const client = createChubClient(config.apikey);
+    const client = createChubClient(config.chubApiKey);
     const response = await client.get(`https://gateway.chub.ai/api/characters/${cardId}`);
     const payload = response.data;
     const card = payload?.node || payload?.data || payload;
@@ -1062,7 +1063,7 @@ export async function refreshCard(cardId, config) {
 export async function syncCards(config, progressCallback = null) {
     loadBlacklist();
     
-    const client = createChubClient(config.apikey);
+    const client = createChubClient(config.chubApiKey);
     const syncLimit = config.syncLimit || 500;
     const pageLimit = config.pageLimit || 1;
     const startPage = config.startPage || 1;
@@ -1072,6 +1073,23 @@ export async function syncCards(config, progressCallback = null) {
     const tagsList = (config.topic || '').split(',').map(tag => tag.trim()).filter(Boolean);
     const shouldCycleTopics = config.cycle_topics && tagsList.length > 0;
     const followedCreators = Array.isArray(config.followedCreators) ? config.followedCreators.filter(Boolean) : [];
+
+    // Build set of blocked creators for fast lookup (case-insensitive)
+    const blockedCreatorsSet = new Set(
+        (Array.isArray(config.blockedCreators) ? config.blockedCreators : [])
+            .map(c => (c || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
+
+    // Helper to check if a card is from a blocked creator
+    const isCreatorBlocked = (card) => {
+        if (blockedCreatorsSet.size === 0) return false;
+        const fullPath = card.fullPath || card.path || '';
+        if (!fullPath) return false;
+        const author = fullPath.split('/')[0]?.toLowerCase();
+        return author && blockedCreatorsSet.has(author);
+    };
+
     const timelineSegments = config.use_timeline && !config.followedCreatorsOnly ? pageLimit : 0;
     const searchSegments = !config.followedCreatorsOnly ? (shouldCycleTopics ? tagsList.length : 1) * pageLimit : 0;
     const followedSegments = (config.followedCreatorsOnly || config.syncFollowedCreators) ? followedCreators.length * pageLimit : 0;
@@ -1095,17 +1113,25 @@ export async function syncCards(config, progressCallback = null) {
     
     scraperLogger.info(`Starting sync - pages ${startPage} to ${maxPage}, ${syncLimit} cards per page`);
 
+    // Run all enabled scrapers sequentially
+    if (config.ctSync?.enabled) {
+        scraperLogger.info('Running Character Tavern sync...');
+        await syncCharacterTavern(config, progressCallback);
+    }
+
     if (config.risuAiSync?.enabled) {
-        await syncRisuAi(config);
+        scraperLogger.info('Running RisuAI sync...');
+        await syncRisuAi(config, progressCallback);
     }
 
     if (config.wyvernSync?.enabled) {
+        scraperLogger.info('Running Wyvern sync...');
         await syncWyvern(config, progressCallback);
     }
 
     // Timeline mode
     if (config.use_timeline && !config.followedCreatorsOnly) {
-        if (!config.apikey) {
+        if (!config.chubApiKey) {
             throw new Error('Timeline mode requires an API key');
         }
         
@@ -1149,6 +1175,12 @@ export async function syncCards(config, progressCallback = null) {
                     }
 
                     if (isBlacklisted(card.id)) {
+                        updateProgress(cardName);
+                        return;
+                    }
+
+                    if (isCreatorBlocked(card)) {
+                        scraperLogger.debug(`Skipping card ${card.id} from blocked creator`);
                         updateProgress(cardName);
                         return;
                     }
@@ -1232,6 +1264,12 @@ export async function syncCards(config, progressCallback = null) {
                         const cardName = card.name || '';
 
                         if (isBlacklisted(card.id) || card.id === 88) {
+                            updateProgress(cardName);
+                            return;
+                        }
+
+                        if (isCreatorBlocked(card)) {
+                            scraperLogger.debug(`Skipping card ${card.id} from blocked creator`);
                             updateProgress(cardName);
                             return;
                         }
@@ -1321,6 +1359,12 @@ export async function syncCards(config, progressCallback = null) {
                         const cardName = card.name || '';
 
                         if (isBlacklisted(card.id)) {
+                            updateProgress(cardName);
+                            return;
+                        }
+
+                        if (isCreatorBlocked(card)) {
+                            scraperLogger.debug(`Skipping card ${card.id} from blocked creator`);
                             updateProgress(cardName);
                             return;
                         }

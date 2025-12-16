@@ -7,6 +7,47 @@ const log = logger.scoped('SYNC-SVC');
 const CHUB_API_BASE = 'https://gateway.chub.ai/api';
 const DEFAULT_BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36';
 
+export async function fetchChubBlockedUsers() {
+    const apiKey = (appConfig.chubApiKey || '').trim();
+    if (!apiKey) {
+        throw new Error('Chub API key is required to fetch blocked users (set in Chub settings tab)');
+    }
+
+    const headers = {
+        'User-Agent': DEFAULT_BROWSER_UA,
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://chub.ai/',
+        'samwise': apiKey,
+        'CH-API-KEY': apiKey
+    };
+
+    try {
+        log.info('Fetching blocked users from Chub API...');
+        const response = await axios.get(`${CHUB_API_BASE}/account`, {
+            headers,
+            timeout: 15000,
+            validateStatus: () => true
+        });
+
+        log.info(`Chub API response status: ${response.status}`);
+
+        if (response.status < 200 || response.status >= 300) {
+            log.error('Chub API error response:', response.data);
+            throw new Error(response.data?.error || `Chub API returned status ${response.status}`);
+        }
+
+        const blockedUsers = Array.isArray(response.data?.blocked_users)
+            ? response.data.blocked_users.filter(u => typeof u === 'string' && u.trim())
+            : [];
+
+        log.info(`Fetched ${blockedUsers.length} blocked users from Chub`);
+        return { blockedUsers };
+    } catch (error) {
+        log.error('Failed to fetch blocked users:', error?.message || error);
+        throw new Error(error?.message || 'Failed to fetch blocked users from Chub');
+    }
+}
+
 export async function fetchChubFollows(profile, { maxPages = 10 } = {}) {
     const trimmed = (profile || '').trim().replace(/^@/, '');
     if (!trimmed) {
@@ -68,7 +109,7 @@ function isChubSource(source) {
 }
 
 export async function syncFavoriteToChub(cardInfo, favorited) {
-    const apiKey = (appConfig.apikey || '').trim();
+    const apiKey = (appConfig.chubApiKey || '').trim();
     if (!apiKey) {
         return false;
     }

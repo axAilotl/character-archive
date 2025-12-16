@@ -100,10 +100,12 @@ export interface Config {
   syncByNew: boolean;
   min_tokens: number;
   apikey: string;
+  chubApiKey?: string;
   chubProfileName?: string;
   followedCreators: string[];
   syncFollowedCreators: boolean;
   followedCreatorsOnly: boolean;
+  blockedCreators?: string[];
   publicBaseUrl?: string;
   sillyTavern?: {
     enabled: boolean;
@@ -130,6 +132,7 @@ export interface Config {
   risuAiSync?: {
     enabled: boolean;
     pageLimit: number;
+    forceUpdate?: boolean;
   };
   wyvernSync?: {
     enabled: boolean;
@@ -174,6 +177,10 @@ export interface ChubFollow {
 export interface ChubFollowsResponse {
   profile: string;
   creators: ChubFollow[];
+}
+
+export interface ChubBlockedUsersResponse {
+  blockedUsers: string[];
 }
 
 export interface GalleryAsset {

@@ -24,6 +24,7 @@ router.get('/wyvern', syncLimiter, syncController.syncWyvern);
 router.get('/risuai', syncLimiter, syncController.syncRisuAi);
 router.post('/favorites', syncController.syncFavoritesToChub);
 router.get('/chub/follows', syncController.getChubFollows);
+router.get('/chub/blocked', syncController.getChubBlockedUsers);
 
 // Sync status and cancel endpoints
 router.get('/status', (req, res) => {

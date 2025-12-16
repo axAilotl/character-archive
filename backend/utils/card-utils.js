@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
 import { parseCard } from '@character-foundry/loader';
+import { deriveFeatures } from '@character-foundry/schemas';
+import { countImages } from '@character-foundry/image-utils';
 
 const log = logger.scoped('CARD-UTIL');
 
@@ -90,60 +92,5 @@ export function readCardPngSpec(cardId) {
     return null;
 }
 
-export function hasEmbeddedImages(text) {
-    if (!text || typeof text !== 'string') {
-        return false;
-    }
-    // Check for Markdown images: ![alt](url)
-    if (/!\[([^\]]*)\]\(([^)]+)\)/.test(text)) {
-        return true;
-    }
-    // Check for HTML images: <img src="...">
-    if (/<img[^>]+src=["']([^"']+)["'][^>]*>/i.test(text)) {
-        return true;
-    }
-    return false;
-}
-
-export function deriveFeatureFlagsFromSpec(specData = {}) {
-    const flags = {};
-    try {
-        const data = specData.data || specData;
-        if (data) {
-            if (Array.isArray(data.alternate_greetings)) {
-                flags.hasAlternateGreetings = data.alternate_greetings.some(g => typeof g === 'string' && g.trim().length > 0);
-            }
-            if (typeof data.mes_example === 'string') {
-                flags.hasExampleDialogues = data.mes_example.trim().length > 0;
-            }
-            if (typeof data.system_prompt === 'string') {
-                flags.hasSystemPrompt = data.system_prompt.trim().length > 0;
-            }
-            const book = data.character_book;
-            if (book && Array.isArray(book.entries)) {
-                const entries = book.entries;
-                flags.hasLorebook = entries.length > 0;
-                const embeddedEntry = entries.find(entry => entry?.extensions?.embedded);
-                const linkedEntry = entries.find(entry => entry?.extensions?.linked);
-                flags.hasEmbeddedLorebook = Boolean(embeddedEntry);
-                flags.hasLinkedLorebook = Boolean(linkedEntry);
-            }
-            const extensions = data.extensions;
-            if (extensions?.gallery && Array.isArray(extensions.gallery)) {
-                flags.hasGallery = extensions.gallery.length > 0;
-            }
-
-            // Check for embedded images in greetings
-            let hasImages = false;
-            if (data.first_mes && hasEmbeddedImages(data.first_mes)) {
-                hasImages = true;
-            } else if (Array.isArray(data.alternate_greetings)) {
-                hasImages = data.alternate_greetings.some(g => typeof g === 'string' && hasEmbeddedImages(g));
-            }
-            flags.hasEmbeddedImages = hasImages;
-        }
-    } catch (error) {
-        log.warn('Failed to derive feature flags from spec', error);
-    }
-    return flags;
-}
+// Old hasEmbeddedImages() and deriveFeatureFlagsFromSpec() functions removed.
+// Use countImages() from @character-foundry/image-utils and deriveFeatures() from @character-foundry/schemas instead.

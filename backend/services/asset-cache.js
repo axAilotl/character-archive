@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { getDatabase } from '../database.js';
 import { readCardPngSpec } from '../utils/card-utils.js';
+import { isURLSafe, extractRemoteImageUrls } from '@character-foundry/image-utils';
 import { logger } from '../utils/logger.js';
 
 const log = logger.scoped('ASSET-CACHE');
@@ -16,38 +17,23 @@ const CACHE_DIR = path.join(__dirname, '../../static', 'cached-assets');
 
 // Security: Allowlist of domains for asset downloads (SSRF protection)
 const ALLOWED_ASSET_DOMAINS = [
-    'chub.ai', 'www.chub.ai', 'avatars.chub.ai', 'cdn.chub.ai', 'gateway.chub.ai',
+    'chub.ai', '*.chub.ai',  // Supports wildcards now
     'realm.risuai.net', 'sv.risuai.xyz',
     'app.wyvern.chat', 'api.wyvern.chat',
-    'character-tavern.com', 'cards.character-tavern.com',
+    'character-tavern.com', '*.character-tavern.com',
     'files.catbox.moe', 'i.imgur.com', 'imgur.com'
 ];
 
 /**
  * Check if a URL is allowed for asset download (SSRF protection)
+ * Now using canonical implementation from @character-foundry/image-utils
  */
 function isAssetUrlAllowed(urlString) {
-    try {
-        const url = new URL(urlString);
-        const hostname = url.hostname.toLowerCase();
-
-        // Block private/local IPs
-        if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|0\.|localhost|::1)/i.test(hostname)) {
-            return false;
-        }
-
-        // Block metadata services (AWS, GCP, Azure)
-        if (hostname === '169.254.169.254' || hostname.endsWith('.internal')) {
-            return false;
-        }
-
-        // Check against allowlist
-        return ALLOWED_ASSET_DOMAINS.some(domain =>
-            hostname === domain || hostname.endsWith('.' + domain)
-        );
-    } catch {
-        return false;
-    }
+    const result = isURLSafe(urlString, {
+        allowedDomains: ALLOWED_ASSET_DOMAINS,
+        allowDataUrls: false  // Block data URLs for remote fetching
+    });
+    return result.safe;
 }
 
 // Ensure cache directory exists
@@ -296,13 +282,12 @@ function extractGalleryItems(payload) {
 
 /**
  * Extract URLs from text (images, audio, video)
+ * Now using canonical implementation from @character-foundry/image-utils
  */
 function extractMediaUrls(text) {
     if (!text || typeof text !== 'string') return [];
-
-    const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg|mp3|wav|ogg|m4a|mp4|webm|mov)(?:\?[^\s<>"{}|\\^`\[\]]*)?)/gi;
-    const matches = text.match(urlRegex) || [];
-    return [...new Set(matches)]; // Deduplicate
+    // Extract all remote image URLs (markdown, HTML, CSS, plain URLs)
+    return extractRemoteImageUrls(text).map(img => img.url);
 }
 
 /**

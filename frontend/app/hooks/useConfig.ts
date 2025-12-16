@@ -138,6 +138,7 @@ export function useConfig(): UseConfigResult {
       const risuAiConfig = {
         enabled: data.get("risu_enabled") === "on",
         pageLimit: parseNumberValue("risu_pageLimit", previousConfig.risuAiSync?.pageLimit ?? 5),
+        forceUpdate: data.get("risu_forceUpdate") === "on",
       };
 
       const previousWyvern = previousConfig.wyvernSync || defaultWyvernSyncState;
@@ -193,6 +194,7 @@ export function useConfig(): UseConfigResult {
       const updatedConfig: Config = {
         ...previousConfig,
         apikey: getStringValue("apikey"),
+        chubApiKey: getStringValue("chubApiKey"),
         autoUpdateMode: data.get("autoUpdateMode") === "on",
         autoUpdateInterval: parseNumberValue("autoUpdateInterval", previousConfig.autoUpdateInterval ?? 900),
         min_tokens: parseNumberValue("min_tokens", previousConfig.min_tokens ?? 0),
@@ -205,6 +207,7 @@ export function useConfig(): UseConfigResult {
         excludeTopic: getStringValue("excludeTopic"),
         followedCreators: parseDelimitedList("followedCreators"),
         followedCreatorsOnly: data.get("followedCreatorsOnly") === "on",
+        blockedCreators: parseDelimitedList("blockedCreators"),
         syncFollowedCreators: data.get("syncFollowedCreators") === "on",
         syncTagsMode: data.get("syncTagsMode") === "on",
         backupMode: data.get("backupMode") === "on",
