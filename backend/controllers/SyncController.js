@@ -2,7 +2,7 @@ import { syncCards } from '../services/scraper.js';
 import { syncCharacterTavern } from '../services/scrapers/CtScraper.js';
 import { syncWyvern } from '../services/scrapers/WyvernScraper.js';
 import { syncRisuAi } from '../services/scrapers/RisuAiScraper.js';
-import { fetchChubFollows } from '../services/SyncService.js';
+import { fetchChubFollows, fetchChubBlockedUsers } from '../services/SyncService.js';
 import { lockService } from '../services/LockService.js';
 import { getDatabase } from '../database.js';
 import { logger } from '../utils/logger.js';
@@ -25,6 +25,16 @@ class SyncController {
         } catch (error) {
             log.error('Failed to fetch Chub follows', error);
             res.status(502).json({ error: error?.message || 'Failed to fetch followed creators from Chub' });
+        }
+    }
+
+    async getChubBlockedUsers(req, res) {
+        try {
+            const result = await fetchChubBlockedUsers();
+            res.json(result);
+        } catch (error) {
+            log.error('Failed to fetch Chub blocked users', error);
+            res.status(502).json({ error: error?.message || 'Failed to fetch blocked users from Chub' });
         }
     }
 
@@ -182,7 +192,7 @@ class SyncController {
 
     async syncFavoritesToChub(req, res) {
         try {
-            const apiKey = (appConfig.apikey || '').trim();
+            const apiKey = (appConfig.chubApiKey || '').trim();
             if (!apiKey) {
                 return res.status(400).json({ success: false, message: 'Chub API key missing in config' });
             }

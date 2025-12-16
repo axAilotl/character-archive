@@ -2,11 +2,11 @@
 
 **A locally-hosted, offline-first archive and search engine for AI character cards.**
 
-This project allows you to mirror character cards from [Chub.ai](https://chub.ai) and [Character Tavern](https://character-tavern.com) to your local machine. It provides a fast, rich interface for browsing, searching (including semantic vector search), and managing your collection, completely independent of external servers once downloaded.
+This project allows you to mirror character cards from multiple sources ([Chub.ai](https://chub.ai), [Character Tavern](https://character-tavern.com), [RisuAI](https://risuai.net), and [Wyvern](https://wyvern.chat)) to your local machine. It provides a fast, rich interface for browsing, searching (including semantic vector search), and managing your collection, completely independent of external servers once downloaded.
 
-## 🚀 Key Features
+## Key Features
 
-*   **Dual Archiving:** Syncs from both Chub.ai (via API) and Character Tavern (via Meilisearch).
+*   **Multi-Source Archiving:** Syncs from four sources - Chub.ai (via API), Character Tavern (via Meilisearch), RisuAI, and Wyvern.
 *   **Offline-First:** Downloads character cards (PNGs + JSON) and caches all gallery images/external assets locally.
 *   **Advanced Search:**
     *   **SQL Search:** Fast filtering by tags, author, tokens, dates, and flags.
@@ -20,27 +20,51 @@ This project allows you to mirror character cards from [Chub.ai](https://chub.ai
 
 ---
 
-## 🛠️ Requirements
+## Requirements
 
 *   **Node.js:** Version 20 or higher.
+*   **pnpm:** Package manager (required for workspace dependencies).
 *   **SQLite:** (Bundled with Node.js drivers, no separate install usually needed).
 *   **Meilisearch (Optional):** Version 1.5+ (Required for advanced/vector search and Character Tavern sync).
 *   **Ollama (Optional):** Required only for semantic vector search embedding generation.
 
+### Dependencies
+
+This project uses the `@character-foundry` package suite for character card parsing and features:
+
+*   `@character-foundry/loader` - Parse character cards from PNG, JSON, CharX formats
+*   `@character-foundry/schemas` - Zod schemas for CCv2/CCv3 validation and feature derivation (workspace dependency)
+*   `@character-foundry/image-utils` - URL extraction and SSRF protection (workspace dependency)
+*   `@character-foundry/federation` - ActivityPub federation support
+*   `@character-foundry/exporter` - Export cards to PNG, CharX, Voxta formats
+*   `@character-foundry/core` - Shared utilities and error types
+
+**Note:** Some packages (`@character-foundry/schemas`, `@character-foundry/image-utils`) use pnpm workspace protocol and require the character-foundry monorepo as a sibling directory. Others are available on public npm.
+
 ---
 
-## 📦 Installation & Setup
+## Installation & Setup
 
-### 1. Installation
+### 1. Prerequisites
+
+Character Archive requires the character-foundry monorepo as a sibling directory:
+
+```
+/your-workspace/
+  character-foundry/    # Monorepo with shared packages
+  character-archive/    # This application
+```
+
+### 2. Installation
 Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/axAilotl/character-archive.git
 cd character-archive
-npm install
+pnpm install
 ```
 
-### 2. Configuration
+### 3. Configuration
 The application relies on a `config.json` file. You can bootstrap this by copying the example helper script, but ultimately you will edit `config.json`.
 
 1.  **Create the config loader:**
@@ -51,7 +75,7 @@ The application relies on a `config.json` file. You can bootstrap this by copyin
 
 2.  **Run the app once to generate `config.json`:**
     ```bash
-    npm run start
+    pnpm start
     ```
     (Then Ctrl+C to stop it). This will create a default `config.json` in the root directory.
 
@@ -94,12 +118,12 @@ The application relies on a `config.json` file. You can bootstrap this by copyin
         }
         ```
 
-### 3. Running the Application
+### 4. Running the Application
 
 **Development Mode (Recommended):**
 Starts both the Backend API (port 6969) and Frontend UI (port 3177) with hot-reloading.
 ```bash
-npm run dev
+pnpm dev
 ```
 *   **Frontend:** [http://localhost:3177](http://localhost:3177)
 *   **Backend:** [http://localhost:6969](http://localhost:6969)
@@ -107,29 +131,32 @@ npm run dev
 **Production Mode:**
 Build the frontend and run the optimized server.
 ```bash
-npm run build --prefix frontend
-npm run prod
+pnpm build --prefix frontend
+pnpm prod
 ```
 
 ---
 
-## 📚 Usage Guide
+## Usage Guide
 
 ### Syncing Cards
 
 *   **Manual Sync (Chub):**
     Click the **Sync** button in the UI header, or run:
     ```bash
-    npm run sync
+    pnpm sync
     ```
     *This respects your `config.json` settings (timeline vs search, tags, etc).*
 
 *   **Manual Sync (Character Tavern):**
     Click the **Sync CT** button (globe icon) in the UI, or run:
     ```bash
-    npm run import:ct
+    pnpm import:ct
     ```
     *(Note: CT sync requires valid cookies in config).*
+
+*   **Manual Sync (RisuAI/Wyvern):**
+    Use the Settings modal in the UI to trigger syncs for RisuAI and Wyvern sources. Configure sync intervals in `config.json`.
 
 ### Searching
 
@@ -161,7 +188,7 @@ To ensure your archive is truly offline:
 
 ---
 
-## 🔧 Advanced Configuration
+## Advanced Configuration
 
 ### Vector Search Setup (Optional)
 1.  Install **Meilisearch** and **Ollama**.
@@ -172,15 +199,15 @@ To ensure your archive is truly offline:
 3.  Enable `vectorSearch` in `config.json` and restart the server.
 4.  **Important:** You must populate the embeddings index:
     ```bash
-    npm run vector:flush
-    npm run vector:backfill
+    pnpm vector:flush
+    pnpm vector:backfill
     ```
     *This process reads all your cards, generates embeddings via Ollama, and uploads them to Meilisearch. It may take a long time.*
 
 ### Maintenance Scripts
-*   `npm run update-metadata`: Refreshes metadata for all local cards from their JSON files.
-*   `npm run fix:flags`: Scans all cards and updates database feature flags (like `hasEmbeddedImages`).
-*   `npm run sync:search`: Pushes all local database content to Meilisearch (for lexical search).
+*   `pnpm update-metadata`: Refreshes metadata for all local cards from their JSON files.
+*   `pnpm fix:flags`: Scans all cards and updates database feature flags (like `hasEmbeddedImages`).
+*   `pnpm sync:search`: Pushes all local database content to Meilisearch (for lexical search).
 
 ### Logging
 The application uses a centralized logging system with scoped loggers for each component. Log output follows the format `[LEVEL][SCOPE] message`.
@@ -189,30 +216,33 @@ The application uses a centralized logging system with scoped loggers for each c
 
 To enable verbose debug logging, set the `LOG_LEVEL` environment variable:
 ```bash
-LOG_LEVEL=DEBUG npm run dev
+LOG_LEVEL=DEBUG pnpm dev
 ```
 
 Filter logs by component using grep:
 ```bash
-npm run dev 2>&1 | grep '\[SYNC\]'
+pnpm dev 2>&1 | grep '\[SYNC\]'
 ```
 
 ---
 
-## ⚠️ Troubleshooting
+## Troubleshooting
 
 *   **Sync Fails (Database not initialized):**
-    Ensure you are running `npm run sync` from the project root. If using the script directly, ensure the database is initialized.
+    Ensure you are running `pnpm sync` from the project root. If using the script directly, ensure the database is initialized.
 *   **404 on Refresh:**
     Refreshing Character Tavern cards is not supported individually (only bulk sync). The UI will now warn you instead of crashing.
 *   **Meilisearch Errors:**
-    If searches fail, ensure Meilisearch is running. If you recently changed schema, run `npm run sync:search`.
+    If searches fail, ensure Meilisearch is running. If you recently changed schema, run `pnpm sync:search`.
 *   **"Missing Config":**
     If the app crashes complaining about config, ensure `config.json` exists and contains valid JSON. Validate your API keys.
 
+*   **Workspace Dependency Errors:**
+    If you see errors about `@character-foundry/schemas` or `@character-foundry/image-utils`, ensure the character-foundry monorepo is available as a sibling directory and run `pnpm install` again.
+
 ---
 
-## 📂 Data Location
+## Data Location
 *   **Database:** `cards.db` (SQLite) - Keep this safe!
 *   **Images/Metadata:** `static/` - Contains all your downloaded card PNGs and JSONs.
 *   **Asset Cache:** `static/cached-assets/` - Cached galleries and external images.

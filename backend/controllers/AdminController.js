@@ -2,7 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { getDatabase } from '../database.js';
-import { readCardPngSpec, deriveFeatureFlagsFromSpec, getCardFilePaths } from '../utils/card-utils.js';
+import { readCardPngSpec, getCardFilePaths } from '../utils/card-utils.js';
+import { deriveFeatures } from '@character-foundry/schemas';
 import { resolveTokenCountsFromMetadata, extractTokenCountLabel, normalizeTokenCounts } from '../utils/token-counts.js';
 import { appConfig } from '../services/ConfigState.js'; // if needed
 import { logger } from '../utils/logger.js';
@@ -209,7 +210,7 @@ class AdminController {
                         }
 
                         // Derive feature flags from spec
-                        const flags = deriveFeatureFlagsFromSpec(spec);
+                        const flags = deriveFeatures(spec);
 
                         // Update database
                         updateStmt.run(

@@ -92,7 +92,7 @@ export async function refreshGalleryIfNeeded(cardId) {
             return null;
         }
 
-        const galleryResult = await cacheGalleryAssets(cardId, appConfig.apikey, { retries: 3 });
+        const galleryResult = await cacheGalleryAssets(cardId, appConfig.chubApiKey, { retries: 3 });
 
         if (galleryResult?.success !== false) {
             const cachedCount = galleryResult.cached || 0;

@@ -9,7 +9,7 @@ import textChunk from 'png-chunk-text';
 import { readCardJsonOnly, readCharX } from '@character-foundry/charx';
 import { getDatabase, upsertCard } from '../database.js';
 import { logger } from '../utils/logger.js';
-import { deriveFeatureFlagsFromSpec } from '../utils/card-utils.js';
+import { deriveFeatures } from '@character-foundry/schemas';
 import { addToBlacklist, isBlacklisted, loadBlacklist, rateLimitedRequest } from './ApiClient.js';
 import { inferTags } from '../utils/keyword-tagger.js';
 

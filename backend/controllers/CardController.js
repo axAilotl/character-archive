@@ -146,7 +146,7 @@ class CardController {
             let galleryResult = null;
 
             if (isFavorited) {
-                galleryResult = await cacheGalleryAssets(cardId, appConfig.apikey);
+                galleryResult = await cacheGalleryAssets(cardId, appConfig.chubApiKey);
 
                 if (galleryResult?.success !== false) {
                     const cachedCount = galleryResult?.cached || 0;

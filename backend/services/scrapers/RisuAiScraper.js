@@ -542,19 +542,14 @@ export class RisuAiScraper extends BaseScraper {
             return { success: false, reason: 'cooldown' };
         }
 
-        // Check existing
+        // Check existing - RisuAI dates are unreliable (often returns download date, not creation date)
+        // Skip entirely if we already have this card unless force or forceUpdate is enabled
+        // No timestamp comparison - can't trust RisuAI dates for update detection
         const existing = this.checkExisting(sourceId);
-        const remoteTimestamp = this.getRemoteTimestamp(item);
-
-        if (existing && !force && remoteTimestamp) {
-            const existingDate = new Date(existing.lastModified).getTime();
-            const remoteTime = new Date(remoteTimestamp).getTime();
-
-            if (remoteTime <= existingDate) {
-                this.log.debug(`Card ${sourceId} unchanged, skipping`);
-                return { success: false, reason: 'unchanged', dbId: existing.id };
-            }
-            this.log.info(`Card ${sourceId} has update`);
+        const forceUpdate = config.forceUpdate || false;
+        if (existing && !force && !forceUpdate) {
+            this.log.debug(`Card ${sourceId} already exists, skipping (no updates for RisuAI)`);
+            return { success: false, reason: 'exists', dbId: existing.id };
         }
 
         const dbId = existing?.id || this.getNextDbId();

@@ -36,8 +36,11 @@ function HomeContent() {
   const [tagAliases, setTagAliases] = useState<Record<string, string[]> | null>(null);
   const [isFetchingChubFollows, setIsFetchingChubFollows] = useState(false);
   const [chubFollowStatus, setChubFollowStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [isFetchingChubBlocked, setIsFetchingChubBlocked] = useState(false);
+  const [chubBlockedStatus, setChubBlockedStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const chubProfileInputRef = useRef<HTMLInputElement | null>(null);
   const followedCreatorsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const blockedCreatorsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Selection management
   const selection = useCardSelection();
@@ -297,6 +300,25 @@ function HomeContent() {
     }
   };
 
+  const handleFetchChubBlocked = async () => {
+    const { fetchChubBlockedUsers } = await import("@/lib/api");
+    setIsFetchingChubBlocked(true);
+    setChubBlockedStatus(null);
+    try {
+      const result = await fetchChubBlockedUsers();
+      const usernames = Array.isArray(result.blockedUsers)
+        ? result.blockedUsers.filter(u => typeof u === "string" && u.trim().length > 0)
+        : [];
+      if (blockedCreatorsTextareaRef.current) blockedCreatorsTextareaRef.current.value = usernames.join(", ");
+      setConfig(prev => prev ? { ...prev, blockedCreators: usernames } : prev);
+      setChubBlockedStatus({ type: "success", message: `Loaded ${usernames.length} blocked user${usernames.length === 1 ? "" : "s"} from Chub.` });
+    } catch (err: any) {
+      setChubBlockedStatus({ type: "error", message: err?.message || "Failed to fetch blocked users." });
+    } finally {
+      setIsFetchingChubBlocked(false);
+    }
+  };
+
   const renderCards = () => {
     if (isLoading) {
       return (
@@ -507,6 +529,10 @@ function HomeContent() {
         handleFetchChubFollows={handleFetchChubFollows}
         isFetchingChubFollows={isFetchingChubFollows}
         chubFollowStatus={chubFollowStatus}
+        blockedCreatorsTextareaRef={blockedCreatorsTextareaRef}
+        handleFetchChubBlocked={handleFetchChubBlocked}
+        isFetchingChubBlocked={isFetchingChubBlocked}
+        chubBlockedStatus={chubBlockedStatus}
         defaultSillyTavernState={defaultSillyTavernState}
         defaultCtSyncState={defaultCtSyncState}
         defaultVectorSearchState={defaultVectorSearchState}

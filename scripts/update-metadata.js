@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDatabase, getDatabase, upsertCard } from '../backend/database.js';
+import { deriveFeatures } from '@character-foundry/schemas';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,48 +33,12 @@ async function updateAllMetadata() {
         
         try {
             const metadata = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-            
-            // Re-detect all boolean flags from metadata
-            let hasAlternateGreetings = false;
-            let hasEmbeddedLorebook = false;
-            let hasLinkedLorebook = false;
-            let hasExampleDialogues = false;
-            let hasSystemPrompt = false;
-            let hasGallery = false;
-            
-            // Check for alternate greetings
-            if (Array.isArray(metadata.alternate_greetings)) {
-                hasAlternateGreetings = metadata.alternate_greetings.some(
-                    g => typeof g === 'string' && g.trim().length > 0
-                );
-            }
-            
-            // Check for embedded lorebook
-            const lorebookEntries = metadata.character_book?.entries;
-            if (Array.isArray(lorebookEntries) && lorebookEntries.length > 0) {
-                hasEmbeddedLorebook = true;
-            }
-            
-            // Check for linked lorebooks
-            if (Array.isArray(metadata.related_lorebooks) && metadata.related_lorebooks.length > 0) {
-                hasLinkedLorebook = true;
-            }
-            
-            // Check for example dialogues
-            if (typeof metadata.mes_example === 'string' && metadata.mes_example.trim().length > 0) {
-                hasExampleDialogues = true;
-            }
-            
-            // Check for system prompt
-            if (typeof metadata.system_prompt === 'string' && metadata.system_prompt.trim().length > 0) {
-                hasSystemPrompt = true;
-            }
-            
-            // Check for gallery
-            if (metadata.extensions?.gallery && Array.isArray(metadata.extensions.gallery) && metadata.extensions.gallery.length > 0) {
-                hasGallery = true;
-            }
 
+            // Derive all feature flags using canonical function
+            const features = deriveFeatures(metadata);
+
+            // Check for gallery assets in database cache (special case)
+            let hasGallery = features.hasGallery || false;
             if (!hasGallery) {
                 try {
                     const cachedGallery = db.prepare(
@@ -86,14 +51,14 @@ async function updateAllMetadata() {
                     console.warn(`[WARNING] Failed to inspect cached gallery for ${cardId}:`, galleryError.message);
                 }
             }
-            
+
             // Update metadata flags
-            metadata.hasAlternateGreetings = hasAlternateGreetings;
-            metadata.hasEmbeddedLorebook = hasEmbeddedLorebook;
-            metadata.hasLinkedLorebook = hasLinkedLorebook;
-            metadata.hasLorebook = hasEmbeddedLorebook || hasLinkedLorebook;
-            metadata.hasExampleDialogues = hasExampleDialogues;
-            metadata.hasSystemPrompt = hasSystemPrompt;
+            metadata.hasAlternateGreetings = features.hasAlternateGreetings || false;
+            metadata.hasEmbeddedLorebook = features.hasEmbeddedLorebook || false;
+            metadata.hasLinkedLorebook = features.hasLinkedLorebook || false;
+            metadata.hasLorebook = features.hasLorebook || false;
+            metadata.hasExampleDialogues = features.hasExampleDialogues || false;
+            metadata.hasSystemPrompt = features.hasSystemPrompt || false;
             metadata.hasGallery = hasGallery;
             
             // Save updated metadata

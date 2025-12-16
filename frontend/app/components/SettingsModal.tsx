@@ -20,6 +20,10 @@ type SettingsModalProps = {
     handleFetchChubFollows: () => void;
     isFetchingChubFollows: boolean;
     chubFollowStatus: MessageStatus;
+    blockedCreatorsTextareaRef: RefObject<HTMLTextAreaElement | null>;
+    handleFetchChubBlocked: () => void;
+    isFetchingChubBlocked: boolean;
+    chubBlockedStatus: MessageStatus;
     defaultSillyTavernState: {
         enabled: boolean;
         baseUrl: string;
@@ -79,6 +83,10 @@ export const SettingsModal = ({
     handleFetchChubFollows,
     isFetchingChubFollows,
     chubFollowStatus,
+    blockedCreatorsTextareaRef,
+    handleFetchChubBlocked,
+    isFetchingChubBlocked,
+    chubBlockedStatus,
     defaultSillyTavernState,
     defaultCtSyncState,
     defaultVectorSearchState,
@@ -271,7 +279,7 @@ export const SettingsModal = ({
                                             API Configuration
                                         </h3>
                                         <label className="flex flex-col gap-2 text-sm">
-                                            <span className="font-medium text-slate-700 dark:text-slate-300">API Key</span>
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">Meilisearch API Key</span>
                                             <input
                                                 type="text"
                                                 name="apikey"
@@ -502,6 +510,23 @@ export const SettingsModal = ({
                                 <div className={clsx('space-y-6', activeTab !== 'chub' && 'hidden')}>
                                     <div className="space-y-3">
                                         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                            Chub API Key
+                                        </h3>
+                                        <label className="flex flex-col gap-2 text-sm">
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">API Key (samwise/CH-API-KEY)</span>
+                                            <input
+                                                type="text"
+                                                name="chubApiKey"
+                                                defaultValue={config?.chubApiKey || ''}
+                                                placeholder="Your Chub.ai API key"
+                                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                            />
+                                            <span className="text-xs text-slate-400">Required for timeline mode, favorites sync, and fetching blocked users</span>
+                                        </label>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                             Chub Profile & Follows
                                         </h3>
                                         <div className="flex flex-col gap-2 text-sm">
@@ -564,6 +589,53 @@ export const SettingsModal = ({
                                                 className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                             />
                                             Followed Creators Only (when syncing)
+                                        </label>
+
+                                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-6">
+                                            Blocked Creators
+                                        </h3>
+                                        <div className="flex flex-col gap-2 text-sm">
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleFetchChubBlocked}
+                                                    disabled={isFetchingChubBlocked}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:opacity-60 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100"
+                                                >
+                                                    {isFetchingChubBlocked ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Download className="h-4 w-4" />
+                                                    )}
+                                                    {isFetchingChubBlocked ? 'Fetching...' : 'Load Blocked Users'}
+                                                </button>
+                                                {chubBlockedStatus && (
+                                                    <span
+                                                        className={clsx(
+                                                            'text-xs font-medium',
+                                                            chubBlockedStatus.type === 'success'
+                                                                ? 'text-emerald-600 dark:text-emerald-400'
+                                                                : 'text-red-600 dark:text-red-400',
+                                                        )}
+                                                    >
+                                                        {chubBlockedStatus.message}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <label className="flex flex-col gap-2 text-sm">
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                                                Blocked Creators (comma-separated)
+                                            </span>
+                                            <textarea
+                                                ref={blockedCreatorsTextareaRef}
+                                                name="blockedCreators"
+                                                defaultValue={config?.blockedCreators?.join(', ') || ''}
+                                                rows={3}
+                                                placeholder="Cards from these creators will be skipped during sync"
+                                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                            />
                                         </label>
 
                                         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-6">
@@ -699,9 +771,22 @@ export const SettingsModal = ({
                                                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                                 />
                                             </label>
+                                            <label className="flex items-center gap-3 text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    name="risu_forceUpdate"
+                                                    defaultChecked={config?.risuAiSync?.forceUpdate || false}
+                                                    className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-slate-700 dark:text-slate-300">Force Update</span>
+                                                    <span className="text-xs text-slate-400 dark:text-slate-500">Re-download existing cards</span>
+                                                </div>
+                                            </label>
                                         </div>
                                         <p className="text-xs text-slate-400 dark:text-slate-500">
                                             Scrapes the latest cards from realm.risuai.net. Downloads V3 JSON, CharX, or embedded PNGs depending on availability.
+                                            By default, existing cards are skipped (RisuAI dates are unreliable). Enable Force Update to re-download all cards.
                                         </p>
                                     </div>
                                 </div>

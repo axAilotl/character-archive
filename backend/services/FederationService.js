@@ -10,6 +10,8 @@ import {
     FileSyncStateStore,
     HttpPlatformAdapter,
     createActor,
+    enableFederation,
+    isFederationEnabled,
 } from '@character-foundry/federation';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -20,15 +22,39 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const baseUrl = process.env.FEDERATION_BASE_URL || 'http://localhost:3100';
 const stateDir = process.env.FEDERATION_STATE_DIR || path.join(__dirname, '../../data/federation');
 
-// State store from package
-const stateStore = new FileSyncStateStore(stateDir);
+// Lazy-initialized instances (federation requires explicit opt-in)
+let _stateStore = null;
+let _syncEngine = null;
 
-// Sync engine from package
-const syncEngine = new SyncEngine({
-    baseUrl,
-    actorId: `${baseUrl}/api/federation/actor`,
-    stateStore,
-});
+function getStateStore() {
+    if (!_stateStore) {
+        _stateStore = new FileSyncStateStore(stateDir);
+    }
+    return _stateStore;
+}
+
+function getSyncEngine() {
+    if (!_syncEngine) {
+        // Federation v0.2.0+ requires explicit opt-in for security
+        if (!isFederationEnabled()) {
+            enableFederation();
+        }
+        _syncEngine = new SyncEngine({
+            baseUrl,
+            actorId: `${baseUrl}/api/federation/actor`,
+            stateStore: getStateStore(),
+        });
+    }
+    return _syncEngine;
+}
+
+// Backwards-compatible exports (lazy)
+const stateStore = { get: (...args) => getStateStore().get(...args), list: (...args) => getStateStore().list(...args) };
+const syncEngine = {
+    registerPlatform: (...args) => getSyncEngine().registerPlatform(...args),
+    unregisterPlatform: (...args) => getSyncEngine().unregisterPlatform(...args),
+    pushCard: (...args) => getSyncEngine().pushCard(...args),
+};
 
 // Platform configs (could move to env/db)
 const platformConfigs = {

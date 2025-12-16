@@ -1,4 +1,4 @@
-import { CardsResponse, Config, ToggleFavoriteResponse, GalleryAsset, CachedAssetsResponse, ChubFollowsResponse, FederationPlatform, SyncState, ConnectionTestResult, PushResult, BulkPushResult } from './types';
+import { CardsResponse, Config, ToggleFavoriteResponse, GalleryAsset, CachedAssetsResponse, ChubFollowsResponse, ChubBlockedUsersResponse, FederationPlatform, SyncState, ConnectionTestResult, PushResult, BulkPushResult } from './types';
 
 const API_BASE = '';
 
@@ -257,6 +257,16 @@ export async function fetchChubFollows(profile?: string): Promise<ChubFollowsRes
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
     const message = errorBody?.error || 'Failed to fetch followed creators from Chub';
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export async function fetchChubBlockedUsers(): Promise<ChubBlockedUsersResponse> {
+  const res = await fetch(`${API_BASE}/api/sync/chub/blocked`, { cache: 'no-store' });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    const message = errorBody?.error || 'Failed to fetch blocked users from Chub';
     throw new Error(message);
   }
   return res.json();

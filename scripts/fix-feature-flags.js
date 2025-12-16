@@ -2,7 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { initDatabase, getDatabase } from '../backend/database.js';
-import { STATIC_DIR, getCardFilePaths, readCardPngSpec, deriveFeatureFlagsFromSpec } from '../backend/utils/card-utils.js';
+import { STATIC_DIR, getCardFilePaths, readCardPngSpec } from '../backend/utils/card-utils.js';
+import { deriveFeatures } from '@character-foundry/schemas';
 
 async function main() {
     await initDatabase();
@@ -21,7 +22,7 @@ async function main() {
             const cardId = metadata.id || parseInt(file.replace('.json', ''), 10);
             if (!cardId) continue;
             const spec = readCardPngSpec(cardId);
-            const specFlags = spec ? deriveFeatureFlagsFromSpec(spec) : {};
+            const specFlags = spec ? deriveFeatures(spec) : {};
 
             const pick = (key, fallback) => {
                 if (typeof specFlags[key] !== 'undefined') return specFlags[key];

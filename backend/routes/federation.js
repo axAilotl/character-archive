@@ -12,8 +12,11 @@ import { getDatabase } from '../database.js';
 
 const router = express.Router();
 
-// Register local adapter
-syncEngine.registerPlatform(archiveAdapter);
+// Register local adapter only if federation is enabled
+const federationEnabled = process.env.FEDERATION_ENABLED === 'true';
+if (federationEnabled) {
+    syncEngine.registerPlatform(archiveAdapter);
+}
 
 // GET /api/federation/actor
 router.get('/actor', (req, res) => {

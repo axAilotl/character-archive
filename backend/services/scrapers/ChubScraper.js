@@ -94,7 +94,7 @@ export class ChubScraper extends BaseScraper {
      * Fetch cards from Chub search API
      */
     async fetchList(page, config) {
-        const client = createChubClient(config.apikey);
+        const client = createChubClient(config.chubApiKey);
         const syncLimit = config.syncLimit || 500;
         const sortBy = config.syncByNew ? 'created_at' : 'last_activity_at';
 
@@ -134,11 +134,11 @@ export class ChubScraper extends BaseScraper {
      * Fetch cards from timeline
      */
     async fetchTimeline(page, config) {
-        if (!config.apikey) {
+        if (!config.chubApiKey) {
             throw new Error('Timeline mode requires an API key');
         }
 
-        const client = createChubClient(config.apikey);
+        const client = createChubClient(config.chubApiKey);
         const url = `https://gateway.chub.ai/api/timeline/v1?page=${page}&count=true`;
 
         try {
@@ -157,7 +157,7 @@ export class ChubScraper extends BaseScraper {
      * Fetch cards from a specific creator
      */
     async fetchByCreator(username, page, config) {
-        const client = createChubClient(config.apikey);
+        const client = createChubClient(config.chubApiKey);
         const syncLimit = config.syncLimit || 500;
 
         const params = {
@@ -313,7 +313,7 @@ export class ChubScraper extends BaseScraper {
 
         try {
             // Fetch ratings
-            const client = createChubClient(config.apikey);
+            const client = createChubClient(config.chubApiKey);
             const { ratingsEnabled, ratings } = await this.fetchRatings(sourceId, client);
             item.ratingsEnabled = ratingsEnabled;
             if (ratings) {

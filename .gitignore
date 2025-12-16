@@ -11,6 +11,7 @@ config.json
 config.local.json
 config.js
 .env*
+.npmrc
 *.log
 .DS_Store
 .idea/
