@@ -135,6 +135,31 @@ pnpm build --prefix frontend
 pnpm prod
 ```
 
+### Docker Deployment
+
+Run Character Archive and Meilisearch using Docker Compose:
+
+```bash
+# From parent directory containing both character-archive/ and character-foundry/
+cd /path/to/character-foundry
+
+# Set up environment
+cd character-archive
+cp .env.example .env
+mkdir -p static meili-data
+touch cards.db
+
+# Start services
+docker compose up -d
+```
+
+Access the application:
+*   **Frontend:** http://localhost:3177
+*   **Backend API:** http://localhost:6969
+*   **Meilisearch:** http://localhost:7700
+
+For detailed Docker configuration, see [docker/README.md](docker/README.md).
+
 ---
 
 ## Usage Guide

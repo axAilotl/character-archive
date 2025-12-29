@@ -129,7 +129,7 @@ export async function syncFavoriteToChub(cardInfo, favorited) {
         'content-type': 'application/json',
         'origin': 'https://chub.ai',
         'referer': 'https://chub.ai/',
-        'user-agent': 'LocalChubRedux/1.0'
+        'user-agent': 'CharacterArchive/1.0'
     };
 
     const method = favorited ? 'post' : 'delete';

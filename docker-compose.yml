@@ -1,0 +1,90 @@
+# Character Archive Docker Compose
+#
+# Usage:
+#   # From parent directory (character-foundry/)
+#   docker compose -f character-archive/docker-compose.yml up -d
+#
+#   # Or from this directory with explicit context
+#   docker compose up -d
+#
+# First-time setup:
+#   1. Copy .env.example to .env and configure
+#   2. Create data directories: mkdir -p static meili-data
+#   3. Create config.json (or let container create default)
+#   4. Run: docker compose up -d
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Character Archive Application
+  # ==========================================================================
+  app:
+    build:
+      context: ..
+      dockerfile: character-archive/Dockerfile
+    image: character-archive:latest
+    container_name: character-archive
+    ports:
+      - "${APP_PORT:-6969}:6969"     # Backend API
+      - "${FRONTEND_PORT:-3177}:3177" # Frontend UI
+    volumes:
+      # Persistent data (REQUIRED)
+      - ./static:/app/static                    # Card images (~130GB)
+      - ./cards.db:/app/cards.db                # SQLite database
+      # Configuration
+      - ./config.json:/app/config.json:ro       # User config (read-only)
+    environment:
+      - NODE_ENV=production
+      - PORT=6969
+      - HOST=0.0.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Allow Docker network IPs for inter-container communication
+      - ALLOWED_IPS=172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      # Ollama for vector search (optional - uses host machine)
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6969/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - archive-net
+    # Allow access to host for Ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ==========================================================================
+  # Meilisearch - Full-text search engine
+  # ==========================================================================
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: meilisearch
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    volumes:
+      - ./meili-data:/meili_data
+    environment:
+      - MEILI_ENV=production
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-}
+      - MEILI_NO_ANALYTICS=true
+      # Increase payload limit for batch indexing
+      - MEILI_HTTP_PAYLOAD_SIZE_LIMIT=104857600
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - archive-net
+
+networks:
+  archive-net:
+    driver: bridge

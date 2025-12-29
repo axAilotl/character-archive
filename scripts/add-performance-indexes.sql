@@ -1,4 +1,4 @@
--- Performance Indexes for Local Chub Redux
+-- Performance Indexes for Character Archive
 -- These indexes dramatically speed up common query patterns
 
 -- Index for source + date filtering (common in search)

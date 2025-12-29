@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+frontend/.next/
+
+# Git
+.git/
+.gitignore
+
+# User data (mount as volumes)
+static/
+*.db
+*.db-shm
+*.db-wal
+meili-data*/
+data/
+
+# Config (mount as volume)
+.env*
+config.json
+config.local.json
+
+# Logs and temp
+*.log
+.output/
+tmp/
+backup/
+
+# Development
+.claude/
+*.md
+!README.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+coverage/
+.nyc_output/

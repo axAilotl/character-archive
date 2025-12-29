@@ -9,7 +9,7 @@ import { appConfig as config } from './backend/services/ConfigState.js';
 import { schedulerService } from './backend/services/SchedulerService.js';
 import configRouter from './backend/routes/config.js';
 import { initDatabase } from './backend/database.js';
-import { configureSearchIndex, configureVectorSearch } from './backend/services/search-index.js';
+import { configureSearchIndex, configureVectorSearch, ensureVectorEmbedders } from './backend/services/search-index.js';
 
 import cardRouter from './backend/routes/cards.js';
 import syncRouter from './backend/routes/sync.js';
@@ -38,12 +38,47 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Security: IP and Domain Whitelist
-const ALLOWED_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+// Parse additional allowed IPs from environment (comma-separated, supports CIDR notation)
+const ALLOWED_IPS = [
+    '127.0.0.1', '::1', '::ffff:127.0.0.1',
+    ...(process.env.ALLOWED_IPS?.split(',').map(ip => ip.trim()).filter(Boolean) || [])
+];
 const ALLOWED_DOMAINS = [/\.local\.vega\.nyc$/, /^localhost$/, /^127\.0\.0\.1$/];
+
+// Check if IP matches a CIDR range (simple prefix-based for Docker networks)
+function isIpInCidr(ip, cidr) {
+    const [range, bits] = cidr.split('/');
+    if (!bits) return ip === range;
+    // Simple prefix matching for common Docker networks (172.x, 10.x, 192.168.x)
+    const maskBits = parseInt(bits, 10);
+    const octetsToMatch = Math.floor(maskBits / 8);
+    const ipParts = ip.split('.');
+    const rangeParts = range.split('.');
+    if (ipParts.length !== 4 || rangeParts.length !== 4) return false;
+    for (let i = 0; i < octetsToMatch; i++) {
+        if (ipParts[i] !== rangeParts[i]) return false;
+    }
+    return true;
+}
+
+// Check if client IP is allowed
+function isIpAllowed(clientIp) {
+    const normalizedIp = clientIp?.replace('::ffff:', '') || '';
+    return ALLOWED_IPS.some(allowed => {
+        const normalizedAllowed = allowed.replace('::ffff:', '');
+        // Exact match
+        if (normalizedIp === normalizedAllowed || clientIp === allowed) return true;
+        // CIDR range match (e.g., 172.16.0.0/12)
+        if (allowed.includes('/') && isIpInCidr(normalizedIp, allowed)) return true;
+        // Prefix match (e.g., "172." matches all 172.x.x.x)
+        if (allowed.endsWith('.') && normalizedIp.startsWith(allowed)) return true;
+        return false;
+    });
+}
 
 app.use((req, res, next) => {
     // 1. IP Whitelist
-    if (!ALLOWED_IPS.includes(req.ip)) {
+    if (!isIpAllowed(req.ip)) {
         console.warn(`[SECURITY] Blocked request from unauthorized IP: ${req.ip}`);
         return res.status(403).send('Forbidden IP');
     }
@@ -107,6 +142,9 @@ app.use('/static', express.static(path.join(__dirname, 'static')));
 initDatabase();
 configureSearchIndex(config.meilisearch);
 configureVectorSearch(config.vectorSearch || {});
+ensureVectorEmbedders().catch(error => {
+    console.warn('[WARN] Failed to ensure vector embedders on startup:', error?.message || error);
+});
 
 
 
@@ -134,7 +172,7 @@ configureVectorSearch(config.vectorSearch || {});
 app.get('/', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'Local Chub Redux API is running',
+        message: 'Character Archive API is running',
         documentation: 'Use the /api endpoints to interact with the service.'
     });
 });
@@ -205,5 +243,4 @@ app.listen(PORT, HOST, () => {
 
 export default app;
 export const startAutoUpdate = () => schedulerService.startAutoUpdate();
-
 
