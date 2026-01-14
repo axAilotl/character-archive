@@ -2,14 +2,13 @@
  * CtScraper - Scraper for Character Tavern
  *
  * Extends BaseScraper with CT-specific:
- * - Meilisearch-based listing API
- * - Authentication via bearer token + Cloudflare cookies
- * - Direct PNG download
- * - Tag filtering and content warnings
+ * - REST API at /api/search/cards
+ * - Authentication via Cloudflare cookies (cf_clearance)
+ * - Direct PNG download from cards.character-tavern.com
+ * - Sort options: newest, trending, oldest
  */
 
 import axios from 'axios';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { BaseScraper } from './BaseScraper.js';
@@ -18,18 +17,15 @@ import { detectLanguage } from '../../database.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SEARCH_URL = 'https://search.character-tavern.com/indexes/characters/search';
+const SEARCH_URL = 'https://character-tavern.com/api/search/cards';
 const CARDS_BASE_URL = 'https://cards.character-tavern.com';
 const CT_SITE_URL = 'https://character-tavern.com';
 
 const DEFAULT_HEADERS = {
     accept: '*/*',
-    'content-type': 'application/json',
     dnt: '1',
-    origin: CT_SITE_URL,
     referer: `${CT_SITE_URL}/`,
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-    'x-meilisearch-client': 'CharacterArchive (node)',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
 };
 
 export class CtScraper extends BaseScraper {
@@ -137,54 +133,36 @@ export class CtScraper extends BaseScraper {
     }
 
     /**
-     * Fetch paginated list from CT's Meilisearch API
+     * Fetch paginated list from CT's search API
      */
     async fetchList(page, config) {
         const {
-            bearerToken,
-            hitsPerPage = 49,
-            minTokens = 300,
-            maxTokens = 900000,
-            excludedWarnings = [],
+            hitsPerPage = 30,
             bannedTags = [],
-            cookies = []
+            cookies = [],
+            sort = 'newest',
+            query = ''
         } = config;
 
-        if (!bearerToken) {
-            throw new Error('Character Tavern bearer token missing');
+        // Build query params
+        const params = new URLSearchParams();
+        params.set('limit', String(hitsPerPage));
+        params.set('page', String(page));
+        params.set('sort', sort);
+        if (query) {
+            params.set('query', query);
         }
 
-        // Build filter
-        const filters = [
-            `totalTokens >= ${minTokens}`,
-            `totalTokens <= ${maxTokens}`
-        ];
-        if (excludedWarnings && excludedWarnings.length > 0) {
-            const warnings = excludedWarnings.map(w => `"${w}"`).join(',');
-            filters.push(`(contentWarnings IS EMPTY OR contentWarnings NOT IN [${warnings}])`);
-        } else {
-            filters.push('(contentWarnings IS EMPTY OR contentWarnings NOT IN [])');
-        }
+        const url = `${SEARCH_URL}?${params.toString()}`;
 
-        const body = {
-            q: '',
-            hitsPerPage,
-            sort: ['createdAt:desc'],
-            filter: filters,
-            page
-        };
-
-        const headers = {
-            ...DEFAULT_HEADERS,
-            authorization: `Bearer ${bearerToken}`
-        };
+        const headers = { ...DEFAULT_HEADERS };
 
         if (cookies.length > 0) {
             headers.Cookie = cookies.join('; ');
         }
 
         try {
-            const response = await axios.post(SEARCH_URL, body, {
+            const response = await axios.get(url, {
                 headers,
                 timeout: 30000
             });
@@ -193,12 +171,12 @@ export class CtScraper extends BaseScraper {
 
             // Store banned tags filter for processCard
             this._bannedTagsLower = (bannedTags || []).map(t => t.toLowerCase());
-            this._totalPages = response.data?.totalPages || response.data?.totalPagesCount || null;
+            this._totalPages = response.data?.totalPages || null;
 
             return hits;
         } catch (error) {
             if (error?.response?.status === 403) {
-                throw new Error('Character Tavern search returned 403 (check bearer token / Cloudflare cookie)');
+                throw new Error('Character Tavern search returned 403 (check Cloudflare cookie)');
             }
             throw error;
         }
@@ -207,7 +185,7 @@ export class CtScraper extends BaseScraper {
     /**
      * CT doesn't need separate card fetch - data comes from list
      */
-    async fetchCard(sourceId) {
+    async fetchCard(_sourceId) {
         // Not used for CT - all data comes from list
         return { data: null, error: 'Not implemented' };
     }
@@ -386,11 +364,6 @@ export class CtScraper extends BaseScraper {
      */
     async sync(config = {}, progressCallback = null) {
         const pageLimit = config.pages || config.pageLimit || 1;
-        const bearerToken = config.bearerToken || process.env.CT_SEARCH_BEARER;
-
-        if (!bearerToken) {
-            throw new Error('Character Tavern bearer token missing (set ctSync.bearerToken or CT_SEARCH_BEARER)');
-        }
 
         const cookies = this.buildCookies({
             cfClearance: config.cfClearance || process.env.CT_CF_CLEARANCE,
@@ -402,13 +375,12 @@ export class CtScraper extends BaseScraper {
         this._currentCookies = cookies;
 
         const scraperConfig = {
-            bearerToken,
             cookies,
-            hitsPerPage: Math.min(config.hitsPerPage || 49, 49),
+            hitsPerPage: Math.min(config.hitsPerPage || 30, 50),
             minTokens: config.minTokens || 300,
-            maxTokens: config.maxTokens || 900000,
-            excludedWarnings: config.excludedWarnings || [],
-            bannedTags: config.bannedTags || []
+            bannedTags: config.bannedTags || [],
+            sort: config.sort || 'newest',
+            query: config.query || ''
         };
 
         this.log.info(`Starting CT sync (${pageLimit} pages)...`);
