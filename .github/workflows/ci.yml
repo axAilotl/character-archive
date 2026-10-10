@@ -49,4 +49,6 @@ jobs:
         working-directory: character-archive
       - run: npm run test:url --prefix frontend
         working-directory: character-archive
+      - run: npm run test:search-query --prefix frontend
+        working-directory: character-archive
       - run: docker compose -f character-archive/docker-compose.yml config
