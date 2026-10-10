@@ -30,6 +30,18 @@ test("opens once cards arrive and only once per id", () => {
   assert.equal(second.nextLast, "2");
 });
 
+test("does not reopen a card that the click handler already selected", () => {
+  const result = resolveUrlCard("2", cards as any, null, "2");
+  assert.equal(result.action, "none");
+  assert.equal(result.nextLast, "2");
+});
+
+test("does not clear a click-opened card while its URL push is still pending", () => {
+  const result = resolveUrlCard(null, cards as any, "2", "2", "2");
+  assert.equal(result.action, "none");
+  assert.equal(result.nextLast, "2");
+});
+
 test("ignores URL ids not present in cards list", () => {
   const result = resolveUrlCard("99", cards as any, null);
   assert.equal(result.action, "none");

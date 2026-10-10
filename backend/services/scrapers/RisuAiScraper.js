@@ -12,8 +12,8 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { load as cheerioLoad } from 'cheerio';
-import { readCardJsonOnly, readCharX } from '@character-foundry/charx';
-import { parseCard } from '@character-foundry/loader';
+import { readCardJsonOnly, readCharX } from '@character-foundry/character-foundry/charx';
+import { parseCard } from '@character-foundry/character-foundry/loader';
 import { BaseScraper } from './BaseScraper.js';
 import { inferTags } from '../../utils/keyword-tagger.js';
 import { rateLimitedRequest } from '../ApiClient.js';
@@ -204,7 +204,7 @@ export class RisuAiScraper extends BaseScraper {
             return cards;
         } catch (error) {
             this.log.error(`Failed to fetch list page ${page}`, error);
-            return [];
+            throw new Error(`RisuAI list page ${page} failed: ${error.message}`, { cause: error });
         }
     }
 

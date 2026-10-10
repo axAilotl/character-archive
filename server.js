@@ -8,8 +8,9 @@ import rateLimit from 'express-rate-limit';
 import { appConfig as config } from './backend/services/ConfigState.js';
 import { schedulerService } from './backend/services/SchedulerService.js';
 import configRouter from './backend/routes/config.js';
+import { startFavoriteSync } from './backend/services/FavoriteSyncService.js';
 import { initDatabase } from './backend/database.js';
-import { configureSearchIndex, configureVectorSearch, ensureVectorEmbedders } from './backend/services/search-index.js';
+import { configureSearchBackend, ensureVectorBackend } from './backend/services/SearchService.js';
 
 import cardRouter from './backend/routes/cards.js';
 import syncRouter from './backend/routes/sync.js';
@@ -17,6 +18,7 @@ import adminRouter from './backend/routes/admin.js';
 import tagRouter from './backend/routes/tags.js';
 import federationRouter from './backend/routes/federation.js';
 import metricsRouter from './backend/routes/metrics.js';
+import vectorRouter from './backend/routes/vector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,13 +138,13 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 // Static files
-app.use('/static', express.static(path.join(__dirname, 'static')));
+app.use('/static', express.static(process.env.CHARACTER_ARCHIVE_STATIC_DIR || path.join(__dirname, 'static')));
 
 // Initialize database
 initDatabase();
-configureSearchIndex(config.meilisearch);
-configureVectorSearch(config.vectorSearch || {});
-ensureVectorEmbedders().catch(error => {
+startFavoriteSync();
+configureSearchBackend(config);
+ensureVectorBackend().catch(error => {
     console.warn('[WARN] Failed to ensure vector embedders on startup:', error?.message || error);
 });
 
@@ -176,9 +178,21 @@ app.get('/', (req, res) => {
         documentation: 'Use the /api endpoints to interact with the service.'
     });
 });
+app.get('/health/live', (req, res) => res.json({ status: 'ok' }));
+app.get('/health/ready', (req, res) => {
+    try {
+        const row = initDatabase({ skipTagRebuild: true, skipTokenBackfill: true, skipSchemaMigrations: true })
+            .prepare('SELECT 1 AS ready')
+            .get();
+        res.json({ status: row?.ready === 1 ? 'ready' : 'not-ready' });
+    } catch (error) {
+        res.status(503).json({ status: 'not-ready', error: error.message });
+    }
+});
 
 app.use('/api/cards', cardRouter);
 app.use('/api/sync', syncRouter);
+app.use('/api/vector', vectorRouter);
 
 app.get('/get_png_info/:cardId', (req, res) => res.redirect(301, `/api/cards/${req.params.cardId}/png-info`));
 app.get('/get_card_metadata/:cardId', (req, res) => res.redirect(301, `/api/cards/${req.params.cardId}/metadata`));
@@ -221,8 +235,8 @@ app.post('/edit_tags/:cardId', (req, res) => res.redirect(307, `/api/cards/${req
 
 
 // Start server
-const PORT = config.port || 6969;
-const HOST = config.ip || '0.0.0.0'; // Listen on all interfaces for LAN access
+const PORT = Number(process.env.PORT || config.port || 6969);
+const HOST = process.env.HOST || config.ip || '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
     console.log(`[INFO] Server running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
@@ -233,9 +247,7 @@ app.listen(PORT, HOST, () => {
     console.log(`[INFO] Database initialized`);
     console.log(`[INFO] Press Ctrl+C to stop`);
     
-    // Start auto-update if enabled
-    schedulerService.startAutoUpdate();
-    schedulerService.startCtAutoUpdate();
+    // Source scheduling and sync execution belong to the durable archive-worker.
     schedulerService.startSearchIndexScheduler();
     schedulerService.startMetricsSnapshotScheduler();
     schedulerService.startWalCheckpointScheduler();
@@ -243,4 +255,3 @@ app.listen(PORT, HOST, () => {
 
 export default app;
 export const startAutoUpdate = () => schedulerService.startAutoUpdate();
-

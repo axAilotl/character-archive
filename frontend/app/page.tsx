@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, Suspense, useRef } from "react";
-import { useSearchParams } from "next/navigation";
 import { fetchTagAliases } from "@/lib/api";
 import type { Card } from "@/lib/types";
 import { Loader2, Sparkles } from "lucide-react";
@@ -12,11 +11,10 @@ import { PaginationHeader } from "./components/PaginationHeader";
 import { PaginationControls } from "./components/PaginationControls";
 import { BulkActionBar } from "./components/BulkActionBar";
 import { SyncStatus, PushNotification } from "./components/StatusBanners";
-import { SettingsModal } from "./components/SettingsModal";
+import { SettingsModal, type SettingsTab } from "./components/SettingsModal";
 import { FederationModal } from "./components/FederationModal";
-import { defaultFilters, normalizeFilters } from "./types/filters";
+import { type SavedSearch, normalizeFilters } from "./types/filters";
 import { defaultSillyTavernState, defaultCtSyncState, defaultVectorSearchState, defaultWyvernSyncState } from "./types/config";
-import { parseTagString } from "./utils/tags";
 import { useLightbox } from "./hooks/useLightbox";
 import { useCardSelection } from "./hooks/useCardSelection";
 import { useConfig } from "./hooks/useConfig";
@@ -29,7 +27,6 @@ import { useSavedSearches } from "./hooks/useSavedSearches";
 import { resolveUrlCard } from "./utils/urlCard";
 
 function HomeContent() {
-  const searchParams = useSearchParams();
   const [darkMode, setDarkMode] = useState(false);
   const [showFederation, setShowFederation] = useState(false);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
@@ -49,12 +46,13 @@ function HomeContent() {
   // Config management
   const configManager = useConfig();
   const { config, setConfig, showSettings, setShowSettings, loading: configLoading, saveStatus: configSaveStatus, saveConfig: handleSaveConfig } = configManager;
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('sync-control');
 
   // Filters management
   const filtersManager = useFilters(undefined, clearSelection);
   const {
     filters, setFilters, searchInputValue, setSearchInputValue, advancedFilterInput, setAdvancedFilterInput,
-    includeTagsSelected, excludeTagsSelected, highlightedTags, highlightedTagsSet, page, setPage,
+    includeTagsSelected, excludeTagsSelected, highlightedTagsSet, page, setPage,
     handleFilterChange, handleIncludeTagsChange, handleExcludeTagsChange,
     handleClearFilters, updateURL, getCardIdFromURL,
   } = filtersManager;
@@ -86,6 +84,14 @@ function HomeContent() {
   const savedSearchesManager = useSavedSearches();
   const { savedSearches, handleSaveSearch, applySavedSearch, removeSavedSearch } = savedSearchesManager;
 
+  useEffect(() => {
+    if (!selectedCard) return;
+    const current = cards.find(card => card.id === selectedCard.id);
+    if (current && current.favorited !== selectedCard.favorited) {
+      setSelectedCard(previous => previous ? { ...previous, favorited: current.favorited } : previous);
+    }
+  }, [cards, selectedCard, setSelectedCard]);
+
   // Lightbox
   const lightbox = useLightbox(galleryAssets, selectedCard?.id);
 
@@ -96,7 +102,7 @@ function HomeContent() {
     ctSyncing, ctSyncStatus, startCtSync: startCtSyncing,
     wyvernSyncing, wyvernSyncStatus, startWyvernSync,
     risuSyncing, risuSyncStatus, startRisuSync,
-    anySyncing, cancelAllSyncs,
+    anySyncing, latestSyncRun, cancelAllSyncs,
   } = sync;
 
   // Computed values
@@ -155,8 +161,18 @@ function HomeContent() {
 
   const urlCardId = getCardIdFromURL();
   const lastUrlCardIdRef = useRef<string | null>(null);
+  const openingCardIdRef = useRef<string | null>(null);
   useEffect(() => {
-    const result = resolveUrlCard(urlCardId, cards, lastUrlCardIdRef.current);
+    if (urlCardId && urlCardId === openingCardIdRef.current) {
+      openingCardIdRef.current = null;
+    }
+    const result = resolveUrlCard(
+      urlCardId,
+      cards,
+      lastUrlCardIdRef.current,
+      selectedCard?.id ?? null,
+      openingCardIdRef.current
+    );
     if (result.action === "clear") {
       lastUrlCardIdRef.current = result.nextLast;
       setSelectedCard(null);
@@ -167,7 +183,7 @@ function HomeContent() {
       openCardDetails(result.card);
     }
     // action "none" falls through
-  }, [urlCardId, cards, openCardDetails, setSelectedCard]);
+  }, [urlCardId, cards, openCardDetails, selectedCard?.id, setSelectedCard]);
 
   // Handlers with proper callbacks
   const handleTagClick = useCallback(async (tag: string) => {
@@ -199,6 +215,7 @@ function HomeContent() {
   }, [filters, setFilters, setSearchInputValue, setAdvancedFilterInput, setPage, clearSelection, setSelectedCard, updateURL]);
 
   const handleCloseCard = useCallback(() => {
+    openingCardIdRef.current = null;
     closeCardDetails(() => updateURL(filters, page, null));
     if (pushStatus && pushStatus.cardId === selectedCard?.id) {
       setPushStatus(null);
@@ -206,6 +223,9 @@ function HomeContent() {
   }, [closeCardDetails, updateURL, filters, page, selectedCard?.id, setPushStatus, pushStatus]);
 
   const handleOpenCard = useCallback(async (card: Card) => {
+    const cardId = card.id.toString();
+    openingCardIdRef.current = cardId;
+    lastUrlCardIdRef.current = cardId;
     await openCardDetails(card, (cardId) => updateURL(filters, page, cardId, true));
   }, [openCardDetails, updateURL, filters, page]);
 
@@ -250,18 +270,16 @@ function HomeContent() {
   // Card actions wrappers
   const wrapToggleFavorite = (card: Card) => toggleFavoriteCard(card, { setCards, setSelectedCard, setCardDetails, setGalleryLoading, setGalleryMessage, setAssetCacheStatus });
   const wrapDeleteCard = (card: Card) => deleteCard(card, { setCards, setCount, setSelectedIds });
-  const wrapRefreshCard = (card: Card) => handleRefreshCard(card, loadCards, handleOpenCard);
+  const wrapRefreshCard = (card: Card, mode: "local" | "source" = "local") => handleRefreshCard(card, loadCards, handleOpenCard, mode);
   const wrapCacheAssets = (card: Card) => handleCacheAssets(card, { setAssetCacheStatus, setAssetCacheMessage });
   const wrapPushToSilly = (card: Card) => handlePushToSilly(card, canPushToSilly, () => wrapCacheAssets(card));
   const wrapPushToArchitect = (card: Card) => handlePushToArchitect(card, canPushToArchitect);
 
-  const handleCardTextClick = (event: React.MouseEvent<HTMLDivElement>, card: Card, index: number) => {
-    const target = event.target as HTMLElement;
-    if (target.closest("button, a, input, textarea")) return;
+  const handleCardTextClick = (event: React.MouseEvent<HTMLElement>, card: Card, index: number) => {
     toggleSelection(card, index, event, cards);
   };
 
-  const handleApplySavedSearch = useCallback((search: any) => {
+  const handleApplySavedSearch = useCallback((search: SavedSearch) => {
     applySavedSearch(search, {
       setFilters,
       setPage,
@@ -293,8 +311,8 @@ function HomeContent() {
       if (chubProfileInputRef.current) chubProfileInputRef.current.value = result.profile;
       setConfig(prev => prev ? { ...prev, chubProfileName: result.profile, followedCreators: usernames } : prev);
       setChubFollowStatus({ type: "success", message: `Loaded ${usernames.length} creator${usernames.length === 1 ? "" : "s"} from Chub.` });
-    } catch (err: any) {
-      setChubFollowStatus({ type: "error", message: err?.message || "Failed to fetch followed creators." });
+    } catch (err) {
+      setChubFollowStatus({ type: "error", message: err instanceof Error ? err.message : "Failed to fetch followed creators." });
     } finally {
       setIsFetchingChubFollows(false);
     }
@@ -312,8 +330,8 @@ function HomeContent() {
       if (blockedCreatorsTextareaRef.current) blockedCreatorsTextareaRef.current.value = usernames.join(", ");
       setConfig(prev => prev ? { ...prev, blockedCreators: usernames } : prev);
       setChubBlockedStatus({ type: "success", message: `Loaded ${usernames.length} blocked user${usernames.length === 1 ? "" : "s"} from Chub.` });
-    } catch (err: any) {
-      setChubBlockedStatus({ type: "error", message: err?.message || "Failed to fetch blocked users." });
+    } catch (err) {
+      setChubBlockedStatus({ type: "error", message: err instanceof Error ? err.message : "Failed to fetch blocked users." });
     } finally {
       setIsFetchingChubBlocked(false);
     }
@@ -360,7 +378,7 @@ function HomeContent() {
             </div>
           </div>
         )}
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
           {cards.map((card, index) => (
             <CardItem
               key={card.id}
@@ -393,8 +411,7 @@ function HomeContent() {
         totalPages={totalPages}
         pageLabel={pageLabel}
         isLoading={isLoading}
-        syncing={syncing}
-        ctSyncing={ctSyncing}
+        syncing={anySyncing}
         darkMode={darkMode}
         onGoToFirstPage={handleGoToFirstPage}
         onNavigateBack={handleNavigateBack}
@@ -404,23 +421,16 @@ function HomeContent() {
         onSaveSearch={() => handleSaveSearch(filters, includeTagsSelected, excludeTagsSelected)}
         onSync={async () => {
           await startSyncing();
-          if (config?.ctSync?.enabled) await startCtSyncing();
         }}
         onOpenFederation={() => setShowFederation(true)}
         onOpenSettings={() => setShowSettings(true)}
         onToggleDarkMode={() => setDarkMode(prev => !prev)}
       />
 
-      <header className="mx-auto w-full max-w-7xl px-6 pt-6 pb-2">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Character Archive</h1>
-          <SyncStatus syncStatus={syncStatus} ctSyncStatus={ctSyncStatus} />
-        </div>
-      </header>
-
       <PushNotification message={globalPushMessage} cardName={pushedCard?.name} onDismiss={() => setPushStatus(null)} />
 
-      <main className="mx-auto w-full max-w-7xl space-y-6 px-6">
+      <main className="mx-auto w-full max-w-7xl space-y-3 px-3 pt-3 sm:px-6">
+        <SyncStatus syncStatus={syncStatus} ctSyncStatus={ctSyncStatus} />
         <FilterBar
           filters={filters}
           searchInputValue={searchInputValue}
@@ -444,7 +454,7 @@ function HomeContent() {
           onRemoveSavedSearch={removeSavedSearch}
         />
 
-        <section className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-lg dark:border-slate-800 dark:bg-slate-900">
+        <section className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 dark:border-slate-800 dark:bg-slate-900">
           <BulkActionBar
             selectedCount={selectedIds.length}
             bulkRefreshing={bulkRefreshing}
@@ -520,6 +530,8 @@ function HomeContent() {
       <SettingsModal
         showSettings={showSettings}
         setShowSettings={setShowSettings}
+        activeTab={settingsTab}
+        setActiveTab={setSettingsTab}
         config={config}
         handleSaveConfig={handleSaveConfig}
         configLoading={configLoading}
@@ -551,11 +563,17 @@ function HomeContent() {
         risuSyncStatus={risuSyncStatus}
         defaultWyvernSyncState={defaultWyvernSyncState}
         anySyncing={anySyncing}
+        latestSyncRun={latestSyncRun}
         cancelAllSyncs={cancelAllSyncs}
       />
       <FederationModal
         show={showFederation}
         onClose={() => setShowFederation(false)}
+        onOpenConnections={() => {
+          setShowFederation(false);
+          setSettingsTab('connections');
+          setShowSettings(true);
+        }}
       />
     </div>
   );

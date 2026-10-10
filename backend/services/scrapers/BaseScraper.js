@@ -19,14 +19,38 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 import { getDatabase, upsertCard } from '../../database.js';
 import { logger } from '../../utils/logger.js';
 import { lockService } from '../LockService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const STATIC_DIR = path.join(__dirname, '../../../static');
-const DATA_DIR = path.join(__dirname, '../../../data');
+const PROJECT_ROOT = path.join(__dirname, '../../..');
+const STATIC_DIR = process.env.CHARACTER_ARCHIVE_STATIC_DIR || path.join(PROJECT_ROOT, 'static');
+const DATA_DIR = process.env.CHARACTER_ARCHIVE_DATA_DIR || path.join(PROJECT_ROOT, 'data');
+
+function timestampToArchiveSecond(value) {
+    if (value instanceof Date) {
+        const milliseconds = value.getTime();
+        return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
+    }
+
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    let normalized = value;
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+        normalized = `${value.replace(' ', 'T')}Z`;
+    }
+    const milliseconds = new Date(normalized).getTime();
+    return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
+}
+
+export function isRemoteTimestampNewer(existingTimestamp, remoteTimestamp) {
+    const existingSecond = timestampToArchiveSecond(existingTimestamp);
+    const remoteSecond = timestampToArchiveSecond(remoteTimestamp);
+    if (existingSecond === null || remoteSecond === null) return true;
+    return remoteSecond > existingSecond;
+}
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -169,28 +193,35 @@ export class BaseScraper {
     async writeCardFiles(dbId, files = {}) {
         const paths = this.getCardDir(dbId);
         const written = [];
+        const staged = [];
 
         try {
-            if (files.png) {
-                await fs.promises.writeFile(paths.pngPath, files.png);
-                written.push('png');
+            const candidates = [
+                ['png', paths.pngPath, files.png],
+                ['fullPng', paths.fullPngPath, files.fullPng],
+                ['charx', paths.charxPath, files.charx],
+                ['json', paths.jsonPath, files.json == null
+                    ? null
+                    : typeof files.json === 'string' ? files.json : `${JSON.stringify(files.json, null, 2)}\n`]
+            ];
+            for (const [label, targetPath, content] of candidates) {
+                if (content == null) continue;
+                const temporaryPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
+                const handle = await fs.promises.open(temporaryPath, 'wx', 0o600);
+                try {
+                    await handle.writeFile(content);
+                    await handle.sync();
+                } finally {
+                    await handle.close();
+                }
+                staged.push({ label, targetPath, temporaryPath });
             }
-            if (files.fullPng) {
-                await fs.promises.writeFile(paths.fullPngPath, files.fullPng);
-                written.push('fullPng');
-            }
-            if (files.charx) {
-                await fs.promises.writeFile(paths.charxPath, files.charx);
-                written.push('charx');
-            }
-            if (files.json) {
-                const jsonContent = typeof files.json === 'string'
-                    ? files.json
-                    : JSON.stringify(files.json, null, 2);
-                await fs.promises.writeFile(paths.jsonPath, jsonContent);
-                written.push('json');
+            for (const entry of staged) {
+                await fs.promises.rename(entry.temporaryPath, entry.targetPath);
+                written.push(entry.label);
             }
         } catch (error) {
+            await Promise.allSettled(staged.map(entry => fs.promises.unlink(entry.temporaryPath)));
             this.log.error(`Failed to write files for card ${dbId}`, error);
             throw error;
         }
@@ -337,10 +368,7 @@ export class BaseScraper {
 
         // Skip if exists and not newer (unless forcing)
         if (existing && !force && remoteTimestamp) {
-            const existingDate = new Date(existing.lastModified).getTime();
-            const remoteTime = new Date(remoteTimestamp).getTime();
-
-            if (remoteTime <= existingDate) {
+            if (!isRemoteTimestampNewer(existing.lastModified, remoteTimestamp)) {
                 this.log.debug(`Card ${sourceId} unchanged, skipping`);
                 return { success: false, reason: 'unchanged', dbId: existing.id };
             }
@@ -483,7 +511,7 @@ export class BaseScraper {
                         currentCard: `[${this.displayName}] ${result.name || this.getSourceId(item)}`,
                         newCards
                     });
-                } else if (result.reason === 'error' || result.reason === 'fetch_failed') {
+                } else if (['error', 'fetch_failed', 'node_fetch_failed'].includes(result.reason)) {
                     errors++;
                 }
 
