@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   BarChart3,
   BookmarkPlus,
@@ -18,7 +19,6 @@ interface PaginationHeaderProps {
   pageLabel: string;
   isLoading: boolean;
   syncing: boolean;
-  ctSyncing: boolean;
   darkMode: boolean;
   onGoToFirstPage: () => void;
   onNavigateBack: () => void;
@@ -38,7 +38,6 @@ export function PaginationHeader({
   pageLabel,
   isLoading,
   syncing,
-  ctSyncing,
   darkMode,
   onGoToFirstPage,
   onNavigateBack,
@@ -51,9 +50,20 @@ export function PaginationHeader({
   onOpenSettings,
   onToggleDarkMode,
 }: PaginationHeaderProps) {
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const updateHeight = () => document.documentElement.style.setProperty('--archive-header-height', `${header.getBoundingClientRect().height}px`);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="sticky top-0 z-40 border-b border-slate-200 bg-slate-50/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
-      <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-6 py-4">
+    <div ref={headerRef} data-archive-header className="sticky top-0 z-40 border-b border-slate-200 bg-slate-50/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)] items-center gap-x-1.5 gap-y-2 px-3 py-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:px-6 sm:py-3 md:grid-cols-[auto_auto_auto_minmax(0,1fr)_auto_auto_auto_auto_auto]">
         <PaginationControls
           page={page}
           totalPages={totalPages}
@@ -63,15 +73,18 @@ export function PaginationHeader({
           onNext={onNavigateForward}
           onLast={onGoToLastPage}
         />
-        <div className="flex flex-1 items-center justify-center text-xs font-medium text-slate-500 dark:text-slate-400">
-          <span>{pageLabel}</span>
+        <div className="min-w-0 text-center md:col-start-4 md:row-start-1">
+          <div className="md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2">
+            <h1 className="truncate text-sm font-bold leading-5 tracking-tight text-slate-900 md:text-base dark:text-slate-100">Character Archive</h1>
+            <p className="truncate text-[10px] font-medium leading-4 text-slate-500 md:text-[11px] dark:text-slate-400" title={pageLabel}>{pageLabel}</p>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="col-span-2 flex items-center justify-end gap-1.5 sm:col-span-1 md:contents">
           <button
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            className="md:col-start-2 md:row-start-1 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             aria-label="Refresh list"
             title="Refresh list"
           >
@@ -80,7 +93,7 @@ export function PaginationHeader({
           <button
             type="button"
             onClick={onSaveSearch}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            className="md:col-start-3 md:row-start-1 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             aria-label="Save search"
             title="Save search"
           >
@@ -89,18 +102,18 @@ export function PaginationHeader({
           <button
             type="button"
             onClick={onSync}
-            disabled={syncing || ctSyncing}
-            className="flex items-center gap-2 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-purple-500 disabled:bg-purple-400"
-            aria-label="Sync all sources"
-            title="Sync Chub + Character Tavern"
+            disabled={syncing}
+            className="md:col-start-5 md:row-start-1 flex h-8 w-8 items-center justify-center gap-2 md:h-9 md:w-9 lg:w-auto rounded-md bg-purple-600 px-2 md:px-2.5 py-1.5 text-sm font-semibold text-white shadow-lg transition hover:bg-purple-500 disabled:bg-purple-400"
+            aria-label="Sync all enabled sources"
+            title="Sync all enabled sources"
           >
-            {syncing || ctSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-            {syncing || ctSyncing ? "Syncing..." : "Sync"}
+            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            <span className="hidden lg:inline">{syncing ? "Syncing..." : "Sync All"}</span>
           </button>
           <button
             type="button"
             onClick={onOpenFederation}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="md:col-start-6 md:row-start-1 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             aria-label="Federation"
             title="Federation settings"
           >
@@ -108,7 +121,7 @@ export function PaginationHeader({
           </button>
           <Link
             href="/metrics"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="md:col-start-7 md:row-start-1 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             aria-label="Metrics"
             title="Archive Metrics"
           >
@@ -117,7 +130,7 @@ export function PaginationHeader({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="md:col-start-8 md:row-start-1 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             aria-label="Settings"
             title="Settings"
           >
@@ -125,7 +138,7 @@ export function PaginationHeader({
           </button>
           <button
             onClick={onToggleDarkMode}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="md:col-start-9 md:row-start-1 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
             title={darkMode ? "Light mode" : "Dark mode"}
           >

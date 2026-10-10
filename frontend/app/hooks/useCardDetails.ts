@@ -1,11 +1,10 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
-  fetchCardMetadata,
-  fetchPngInfo,
   fetchCardGallery,
   getCachedAssets,
 } from "@/lib/api";
 import type { Card, GalleryAsset, CachedAsset } from "@/lib/types";
+import { getDefinitionData, getEmbeddedDefinitionData, loadCardDetailPayload } from "./cardDetailPayload";
 
 interface CardDetails {
   metadata: Record<string, any> | null;
@@ -67,6 +66,7 @@ export function useCardDetails(
   const [cachedAssetsLoading, setCachedAssetsLoading] = useState(false);
   const [assetCacheStatus, setAssetCacheStatus] = useState<{ cached: boolean; count: number } | null>(null);
   const [assetCacheMessage, setAssetCacheMessage] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const openRequestRef = useRef<{ cardId: string; promise: Promise<void> } | null>(null);
 
   // Clear gallery message when card closes
   useEffect(() => {
@@ -120,17 +120,22 @@ export function useCardDetails(
   }, [selectedCard]);
 
   const openCardDetails = useCallback(async (card: Card, updateURL?: (cardId: string) => void) => {
+    const cardId = card.id.toString();
+    if (openRequestRef.current?.cardId === cardId) {
+      await openRequestRef.current.promise;
+      return;
+    }
     setSelectedCard(card);
-    updateURL?.(card.id.toString());
+    updateURL?.(cardId);
     setDetailsLoading(true);
     const shouldFetchGallery = card.favorited === 1 || card.hasGallery;
     setGalleryLoading(shouldFetchGallery);
     setGalleryMessage(null);
 
-    try {
-      const [metadata, pngInfo, galleryResult] = await Promise.all([
-        fetchCardMetadata(card.id).catch(() => null),
-        fetchPngInfo(card.id).catch(() => null),
+    const request = (async () => {
+      try {
+      const [{ metadata, pngInfo }, galleryResult] = await Promise.all([
+        loadCardDetailPayload(card.id),
         shouldFetchGallery
           ? fetchCardGallery(card.id).catch(err => ({
               success: false,
@@ -166,7 +171,10 @@ export function useCardDetails(
           }
         : null;
 
-      if (metadataFlags) {
+      const metadataFlagsChanged = metadataFlags && Object.entries(metadataFlags).some(
+        ([key, value]) => Boolean((card as any)[key]) !== value
+      );
+      if (metadataFlagsChanged) {
         setSelectedCard(prev => (prev && prev.id === card.id ? { ...prev, ...metadataFlags } : prev));
         setCards(prev =>
           prev.map(existing => (existing.id === card.id ? { ...existing, ...metadataFlags } : existing))
@@ -186,12 +194,21 @@ export function useCardDetails(
         gallery: galleryAssets,
         galleryError,
       });
-    } catch (err) {
-      console.error(err);
-      setCardDetails({ metadata: null, pngInfo: null, gallery: [], galleryError: null });
+      } catch (err) {
+        console.error(err);
+        setCardDetails({ metadata: null, pngInfo: null, gallery: [], galleryError: null });
+      } finally {
+        setDetailsLoading(false);
+        setGalleryLoading(false);
+      }
+    })();
+    openRequestRef.current = { cardId, promise: request };
+    try {
+      await request;
     } finally {
-      setDetailsLoading(false);
-      setGalleryLoading(false);
+      if (openRequestRef.current?.promise === request) {
+        openRequestRef.current = null;
+      }
     }
   }, [setCards]);
 
@@ -203,16 +220,9 @@ export function useCardDetails(
   }, []);
 
   // Computed values
-  const pngData = cardDetails.pngInfo?.data?.data ?? null;
+  const pngData = useMemo(() => getEmbeddedDefinitionData(cardDetails.pngInfo), [cardDetails.pngInfo]);
 
-  const definitionData = useMemo(() => {
-    const definition = (cardDetails.metadata as any)?.definition;
-    if (!definition) return null;
-    if (definition?.data) {
-      return definition.data as Record<string, any>;
-    }
-    return null;
-  }, [cardDetails.metadata]);
+  const definitionData = useMemo(() => getDefinitionData(cardDetails.metadata), [cardDetails.metadata]);
 
   const resolveTextField = useCallback((key: string) => {
     const pickValue = (source: Record<string, any> | null | undefined) => {

@@ -1,0 +1,379 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import { LanceSearchBackend } from './LanceSearchBackend.js';
+import { hasBooleanSyntax, hasExactPhraseSyntax } from './boolean-query.js';
+
+function document(overrides) {
+    return {
+        id: '1',
+        name: 'Aster',
+        tagline: '',
+        description: '',
+        platform_summary: '',
+        author: 'author',
+        source: 'chub',
+        sourceId: 'source-1',
+        sourcePath: '',
+        sourceSpecific: '',
+        fullPath: '',
+        tags: [],
+        topics: [],
+        type: 'character',
+        language: 'en',
+        visibility: 'public',
+        favorited: 0,
+        hasAlternateGreetings: false,
+        hasLorebook: false,
+        hasEmbeddedLorebook: false,
+        hasLinkedLorebook: false,
+        hasExampleDialogues: false,
+        hasSystemPrompt: false,
+        hasGallery: false,
+        hasEmbeddedImages: false,
+        hasExpressions: false,
+        tokenCount: 0,
+        token_count: 0,
+        rating: 0,
+        ratingCount: 0,
+        starCount: 0,
+        n_favorites: 0,
+        favorites: 0,
+        nChats: 0,
+        nMessages: 0,
+        tokenDescriptionCount: 0,
+        tokenPersonalityCount: 0,
+        tokenScenarioCount: 0,
+        tokenMesExampleCount: 0,
+        tokenFirstMessageCount: 0,
+        tokenSystemPromptCount: 0,
+        tokenPostHistoryCount: 0,
+        created: '2026-01-01',
+        createdAt: '2026-01-01',
+        added: '2026-01-01',
+        updated: '2026-01-01',
+        lastModified: '2026-01-01',
+        scoreComposite: 0,
+        scoreVelocity: 0,
+        engagementScore: 0,
+        engagementVelocity: 0,
+        ...overrides
+    };
+}
+
+test('LanceDB preserves lexical search, filters, sorting, and durable updates', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test' });
+
+    await backend.rebuild([
+        document({ id: '1', name: 'Wizard of Ash', description: 'ancient fire mage', tags: ['fantasy'], source: 'ct', tokenCount: 900 }),
+        document({ id: '2', name: 'Star Pilot', description: 'spaceship captain', tags: ['sci-fi'], source: 'chub', tokenCount: 1800 }),
+        document({ id: '3', name: 'Forest Wizard', description: 'gentle druid mage', tags: ['fantasy'], source: 'ct', tokenCount: 2400 })
+    ]);
+
+    const lexical = await backend.searchLexical({
+        text: 'wizard',
+        filter: 'source = "ct" AND tags = "fantasy"',
+        page: 1,
+        limit: 10,
+        sort: null
+    });
+    assert.deepEqual(new Set(lexical.ids), new Set(['1', '3']));
+    assert.equal(lexical.total, 2);
+    assert.match(lexical.appliedFilter, /array_contains/);
+
+    const filtered = await backend.searchLexical({
+        filter: 'tokenCount >= 1000',
+        page: 1,
+        limit: 10,
+        sort: 'tokens_desc'
+    });
+    assert.deepEqual(filtered.ids, ['3', '2']);
+    assert.equal(filtered.total, 2);
+
+    await backend.upsertDocuments([document({ id: '2', name: 'Star Pilot', tokenCount: 2600, source: 'chub' })]);
+    await backend.upsertDocuments([document({ id: '4', name: 'Moon Witch', description: 'lunar spellcaster', tokenCount: 800 })]);
+    await backend.deleteDocumentsByIds(['1']);
+    const updated = await backend.searchLexical({ filter: 'tokenCount >= 1000', limit: 10, sort: 'tokens_desc' });
+    assert.deepEqual(updated.ids, ['2', '3']);
+    const incrementalText = await backend.searchLexical({ text: 'witch', limit: 10, sort: null });
+    assert.deepEqual(incrementalText.ids, ['4']);
+    assert.equal(await backend.countRows(), 3);
+
+    await backend.close();
+});
+
+test('LanceDB supports quoted exact-phrase searches', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-phrase-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test' });
+    await backend.rebuild([
+        document({ id: '1', name: 'The Fell Heroes Party' }),
+        document({ id: '2', name: 'Heroes Never Leave the Party' })
+    ]);
+
+    const result = await backend.searchLexical({ text: '"heroes party"', sort: null });
+
+    assert.deepEqual(result.ids, ['1']);
+    await backend.close();
+});
+
+test('LanceDB can return an internal hybrid candidate window larger than an API page', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-window-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test', maxTotalHits: 1000 });
+    await backend.rebuild(Array.from({ length: 250 }, (_, index) => document({
+        id: String(index + 1),
+        name: `Shared Hero ${index + 1}`
+    })));
+
+    const result = await backend.searchLexical({ text: 'shared', limit: 250, sort: null });
+
+    assert.equal(result.ids.length, 250);
+    assert.equal(result.total, 250);
+    await backend.close();
+});
+
+test('LanceDB applies documented Boolean query operators', async t => {
+    assert.equal(hasBooleanSyntax('mentor AND party'), true);
+    assert.equal(hasBooleanSyntax('heroes party'), false);
+    assert.equal(hasExactPhraseSyntax('"heroes party"'), true);
+    assert.equal(hasExactPhraseSyntax('heroes party'), false);
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-boolean-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test' });
+    await backend.rebuild([
+        document({ id: '1', name: 'Mentor' }),
+        document({ id: '2', name: 'Party' }),
+        document({ id: '3', name: 'Mentor Party' }),
+        document({ id: '4', name: 'Guide' })
+    ]);
+
+    assert.deepEqual((await backend.searchLexical({ text: 'mentor AND party', sort: null })).ids, ['3']);
+    assert.deepEqual(new Set((await backend.searchLexical({ text: 'mentor OR party', sort: null })).ids), new Set(['1', '2', '3']));
+    assert.deepEqual((await backend.searchLexical({ text: 'mentor NOT party', sort: null })).ids, ['1']);
+    assert.deepEqual(
+        new Set((await backend.searchLexical({ text: '(mentor OR guide) NOT party', sort: null })).ids),
+        new Set(['1', '4'])
+    );
+    await backend.close();
+});
+
+test('LanceDB keeps grouped phrase matches beyond the NOT universe hit window', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-boolean-window-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test', maxTotalHits: 100 });
+    t.after(() => backend.close());
+    await backend.rebuild([
+        ...Array.from({ length: 100 }, (_, index) => document({ id: `filler-${index}`, name: 'Unrelated' })),
+        ...['spaceship', 'space station', 'starship', 'star ship', 'space ship'].map((name, index) =>
+            document({ id: `match-${index}`, name, source: index % 2 ? 'ct' : 'chub' })),
+        document({ id: 'separated', name: 'space exploration station' }),
+        document({ id: 'gold', name: 'spaceship gold ship' }),
+        document({ id: 'goldship', name: 'starship goldship' }),
+        document({ id: 'azure', name: 'space station azure lane' }),
+        document({ id: 'not-excluded', name: 'space ship gold cargo ship' })
+    ]);
+
+    const positive = '("spaceship" OR "space station" OR "starship" OR "star ship" OR "space ship")';
+    const text = `${positive} AND NOT ("gold ship" OR "goldship" OR "azure lane")`;
+    const expected = ['match-0', 'match-1', 'match-2', 'match-3', 'match-4', 'not-excluded'];
+    assert.equal((await backend.searchLexical({ text: positive, sort: null })).total, 9);
+    const result = await backend.searchLexical({ text, sort: null });
+    assert.deepEqual(new Set(result.ids), new Set(expected));
+    assert.equal(result.total, expected.length);
+
+    const page = await backend.searchLexical({ text, page: 2, limit: 2, sort: null });
+    assert.deepEqual(page.ids, result.ids.slice(2, 4));
+    assert.equal(page.total, expected.length);
+
+    const filtered = await backend.searchLexical({ text, filter: 'source = "chub"', sort: null });
+    assert.deepEqual(new Set(filtered.ids), new Set(['match-0', 'match-2', 'match-4', 'not-excluded']));
+    assert.equal(filtered.total, 4);
+
+    const negated = await backend.searchLexical({ text: 'NOT ("gold ship" OR "goldship" OR "azure lane")', limit: 100 });
+    assert.equal(negated.total, 107, 'standalone NOT also uses every document in the universe');
+});
+
+test('LanceDB preserves grouped filter negation and IN-list semantics', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-filter-compat-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test' });
+    await backend.rebuild([
+        document({ id: '1', source: 'ct', hasLorebook: true, tokenCount: 500 }),
+        document({ id: '2', source: 'ct', hasGallery: true, tokenCount: 1500 }),
+        document({ id: '3', name: 'Star: Pilot', author: 'Anonymous', source: 'chub', tags: ['fantasy'], tokenCount: 1800 }),
+        document({ id: '4', source: 'wyvern', tags: ['sci-fi'], tokenCount: 3000 })
+    ]);
+
+    const negated = await backend.searchLexical({
+        filter: 'NOT (hasLorebook = true OR hasGallery = true)',
+        limit: 10,
+        sort: null
+    });
+    assert.deepEqual(negated.ids, ['3', '4']);
+
+    const listed = await backend.searchLexical({
+        filter: 'source IN ["ct", "chub"] AND tags IN ["fantasy", "sci-fi"]',
+        limit: 10,
+        sort: null
+    });
+    assert.deepEqual(listed.ids, ['3']);
+
+    const ranged = await backend.searchLexical({
+        filter: 'tokenCount 1000 TO 2000 AND source NOT IN ["ct"]',
+        limit: 10,
+        sort: null
+    });
+    assert.deepEqual(ranged.ids, ['3']);
+
+    const textCase = await backend.searchLexical({
+        filter: 'author = "anonymous" AND name = "star: pilot"',
+        limit: 10,
+        sort: null
+    });
+    assert.deepEqual(textCase.ids, ['3']);
+
+    await backend.close();
+});
+
+test('LanceDB rebuild swaps an indexed shadow table only after the build succeeds', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-swap-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test', batchSize: 1 });
+
+    await backend.rebuild([document({ id: '1', name: 'Original Wizard' })]);
+    const initialTableName = backend.activeTableName;
+    const originalCreateIndexes = backend.createIndexes.bind(backend);
+    backend.createIndexes = async () => {
+        throw new Error('simulated index failure');
+    };
+
+    await assert.rejects(
+        backend.rebuild([document({ id: '2', name: 'Replacement Pilot' })]),
+        /simulated index failure/
+    );
+    assert.equal(backend.activeTableName, initialTableName);
+    assert.deepEqual((await backend.searchLexical({ text: 'wizard', sort: null })).ids, ['1']);
+    assert.deepEqual((await backend.searchLexical({ text: 'pilot', sort: null })).ids, []);
+
+    backend.createIndexes = originalCreateIndexes;
+    await backend.rebuildBatches((async function* () {
+        yield [document({ id: '2', name: 'Replacement Pilot' })];
+        yield [document({ id: '3', name: 'Second Pilot' })];
+    })());
+    assert.notEqual(backend.activeTableName, initialTableName);
+    assert.deepEqual(new Set((await backend.searchLexical({ text: 'pilot', sort: null })).ids), new Set(['2', '3']));
+    assert.deepEqual((await backend.searchLexical({ text: 'wizard', sort: null })).ids, []);
+
+    await backend.close();
+});
+
+test('LanceDB vector search uses the same filters and response contract', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-vector-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const embeddedTexts = [];
+    const backend = new LanceSearchBackend({
+        uri: directory,
+        tableName: 'cards_test',
+        vectorTableName: 'vectors_test',
+        vectorConfig: {
+            enabled: true,
+            embedModel: 'test-model',
+            embedDimensions: 3,
+            embeddingProvider: 'openai',
+            embeddingUrl: 'http://unused',
+            queryInstruction: 'Retrieve character cards matching the requested character, scenario, traits, or premise'
+        },
+        embeddingRequest: async ({ texts }) => {
+            embeddedTexts.push(...texts);
+            return [[1, 0, 0]];
+        }
+    });
+    await backend.upsertVectorDocuments([
+        { document: document({ id: '1', name: 'Fire Mage', source: 'ct', tags: ['fantasy'] }), vector: [1, 0, 0], text: 'fire mage' },
+        { document: document({ id: '2', name: 'Pilot', source: 'chub', tags: ['sci-fi'] }), vector: [0, 1, 0], text: 'space pilot' },
+        { document: document({ id: '3', name: 'Druid', source: 'ct', tags: ['fantasy'] }), vector: [0.8, 0.2, 0], text: 'forest druid' }
+    ]);
+    await backend.upsertVectorDocuments([
+        { document: document({ id: '1', name: 'Fire Mage', source: 'ct', tags: ['fantasy'] }), vector: [1, 0, 0], text: 'fire mage' }
+    ]);
+    const vectorTable = await backend.openVectorTable();
+    assert.ok((await vectorTable.listVersions()).length > 1);
+    const optimizeStats = await backend.optimizeVector({ cleanupOlderThan: new Date(Date.now() + 1000), deleteUnverified: true });
+    assert.ok(optimizeStats.prune.oldVersionsRemoved > 0);
+    assert.equal((await vectorTable.listVersions()).length, 1);
+    assert.equal(await vectorTable.countRows(), 3);
+
+    const result = await backend.searchVector({
+        text: 'magic',
+        filter: 'source = "ct" AND tags = "fantasy"',
+        page: 1,
+        limit: 10
+    });
+    assert.deepEqual(result.ids, ['1', '3']);
+    assert.equal(result.total, 2);
+    assert.equal(result.chunkMatches['1'].text, 'fire mage');
+    assert.ok(result.scores['1'] > result.scores['3']);
+    assert.equal(result.meta.provider, 'lancedb');
+    assert.equal(
+        embeddedTexts[0],
+        'Instruct: Retrieve character cards matching the requested character, scenario, traits, or premise\nQuery:magic'
+    );
+
+    await backend.deleteVectorDocuments(['1']);
+    const afterDelete = await backend.searchVector({ text: 'magic', limit: 10 });
+    assert.deepEqual(new Set(afterDelete.ids), new Set(['2', '3']));
+    await backend.close();
+});
+
+test('LanceDB vector index finalization reuses an existing HNSW index', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-finalize-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({
+        uri: directory,
+        vectorTableName: 'vectors_test',
+        vectorConfig: { enabled: true, embedDimensions: 3 }
+    });
+    await backend.upsertVectorDocuments(Array.from({ length: 5 }, (_, index) => ({
+        document: document({ id: String(index + 1), name: `Card ${index + 1}` }),
+        vector: index % 2 ? [0, 1, 0] : [1, 0, 0],
+        text: `card ${index + 1}`
+    })));
+
+    assert.deepEqual(await backend.ensureVectorIndex(), { created: true, optimized: false });
+    assert.deepEqual(await backend.ensureVectorIndex(), { created: false, optimized: false });
+    await backend.close();
+});
+
+test('filtered pagination shares counts and observes writes from another connection', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-count-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const reader = new LanceSearchBackend({ uri: directory });
+    const writer = new LanceSearchBackend({ uri: directory });
+    t.after(() => reader.close());
+    t.after(() => writer.close());
+    await writer.rebuild([
+        document({ id: '1', name: 'First', tokenCount: 100 }),
+        document({ id: '2', name: 'Second', tokenCount: 200 })
+    ]);
+    const table = await reader.open();
+    let counts = 0;
+    const countRows = table.countRows.bind(table);
+    table.countRows = (...args) => { counts++; return countRows(...args); };
+    const first = await reader.searchLexical({ filter: 'tokenCount >= 100', page: 1, limit: 1 });
+    const second = await reader.searchLexical({ filter: 'tokenCount >= 100', page: 2, limit: 1 });
+    assert.equal(counts, 1);
+    assert.equal(first.total, 2);
+    assert.equal(second.total, 2);
+    assert.notDeepEqual(first.ids, second.ids);
+    await writer.upsertDocuments([document({ id: '3', name: 'Third', tokenCount: 300 })]);
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    const updated = await reader.searchLexical({ filter: 'tokenCount >= 100', limit: 10 });
+    assert.equal(updated.total, 3);
+    assert.equal(counts, 2);
+});

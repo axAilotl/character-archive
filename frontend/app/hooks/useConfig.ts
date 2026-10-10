@@ -1,3 +1,4 @@
+import { readDirectConnectionSettings } from '../utils/directConnectionSettings';
 import { useState, useEffect, useCallback } from "react";
 import { fetchConfig as fetchConfigApi, updateConfig as updateConfigApi } from "@/lib/api";
 import type { Config } from "@/lib/types";
@@ -151,10 +152,36 @@ export function useConfig(): UseConfigResult {
       };
 
       const previousVector = previousConfig.vectorSearch || defaultVectorSearchState;
+      const previousSearch = previousConfig.search || {
+        enabled: false,
+        backend: "lancedb" as const,
+        lancedb: { uri: "", tableName: "cards", batchSize: 2000, maxTotalHits: 10000 },
+      };
+      const searchConfig: NonNullable<Config["search"]> = {
+        ...previousSearch,
+        enabled: data.get("search_enabled") === "on",
+        backend: data.get("search_backend") === "meilisearch" ? "meilisearch" : "lancedb",
+        lancedb: {
+          ...previousSearch.lancedb,
+          uri: getStringValue("search_lanceUri", { trim: true }),
+          tableName: getStringValue("search_lanceTable", { trim: true }) || "cards",
+          batchSize: Math.max(100, parseNumberValue("search_lanceBatchSize", previousSearch.lancedb?.batchSize ?? 2000)),
+          maxTotalHits: Math.max(100, parseNumberValue("search_maxTotalHits", previousSearch.lancedb?.maxTotalHits ?? 10000)),
+        },
+      };
+      const previousMeili = previousConfig.meilisearch || { enabled: false, host: "http://127.0.0.1:7700", apiKey: "", indexName: "cards" };
+      const meilisearchConfig: NonNullable<Config["meilisearch"]> = {
+        ...previousMeili,
+        enabled: data.get("meili_enabled") === "on",
+        host: getStringValue("meili_host", { trim: true }) || previousMeili.host,
+        apiKey: getStringValue("meili_apiKey", { trim: true }),
+        indexName: getStringValue("meili_indexName", { trim: true }) || "cards",
+      };
       const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-      const vectorConfig = {
+      const vectorConfig: NonNullable<Config["vectorSearch"]> = {
         ...previousVector,
         enabled: data.get("vector_enabled") === "on",
+        enableChunks: data.get("vector_enableChunks") === "on",
         cardsIndex: getStringValue("vector_cardsIndex", { trim: true }) || previousVector.cardsIndex,
         chunksIndex: getStringValue("vector_chunksIndex", { trim: true }) || previousVector.chunksIndex,
         embedModel: getStringValue("vector_embedModel", { trim: true }) || previousVector.embedModel,
@@ -166,6 +193,10 @@ export function useConfig(): UseConfigResult {
             previousVector.embedDimensions ?? defaultVectorSearchState.embedDimensions,
           ),
         ),
+        embeddingProvider: data.get("vector_embeddingProvider") === "openai" ? "openai" : "ollama",
+        embeddingUrl: getStringValue("vector_embeddingUrl", { trim: true }),
+        embeddingApiKey: getStringValue("vector_embeddingApiKey", { trim: true }),
+        queryInstruction: getStringValue("vector_queryInstruction", { trim: true }),
         ollamaUrl: getStringValue("vector_ollamaUrl", { trim: true }) || previousVector.ollamaUrl,
         semanticRatio: clamp(
           parseFloatValue("vector_semanticRatio", previousVector.semanticRatio ?? defaultVectorSearchState.semanticRatio),
@@ -214,9 +245,12 @@ export function useConfig(): UseConfigResult {
         use_timeline: data.get("use_timeline") === "on",
         publicBaseUrl: getStringValue("publicBaseUrl", { trim: true }),
         sillyTavern: sillyConfig,
+        ...readDirectConnectionSettings(data, previousConfig),
         ctSync: ctConfig,
         risuAiSync: risuAiConfig,
         wyvernSync: wyvernConfig,
+        search: searchConfig,
+        meilisearch: meilisearchConfig,
         vectorSearch: vectorConfig,
       };
 
@@ -226,9 +260,12 @@ export function useConfig(): UseConfigResult {
         const refreshedConfig = await fetchConfigApi();
         setConfig(refreshedConfig);
         setSaveStatus({ type: "success", message: "Settings saved." });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to save config", err);
-        setSaveStatus({ type: "error", message: err?.message || "Failed to save settings." });
+        setSaveStatus({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to save settings.",
+        });
       } finally {
         setLoading(false);
       }

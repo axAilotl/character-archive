@@ -6,13 +6,14 @@ import extractChunks from 'png-chunks-extract';
 import encodeChunks from 'png-chunks-encode';
 import textChunk from 'png-chunk-text';
 import { analyzePng, analyzeExistingPng, isPngSuspect, detectFuzzPattern } from '../utils/png-utils.js';
-import { countImages } from '@character-foundry/image-utils';
+import { countImages } from '@character-foundry/character-foundry/image-utils';
 import { upsertCard, getDatabase } from '../database.js';
 import { resolveTokenCountsFromMetadata, mergeTokenCounts } from '../utils/token-counts.js';
 import { logger } from '../utils/logger.js';
 import {
     createChubClient,
     rateLimitedRequest,
+    retryTransientRequest,
     loadBlacklist,
     isBlacklisted
 } from './ApiClient.js';
@@ -31,8 +32,9 @@ const __dirname = path.dirname(__filename);
 
 const fsp = fs.promises;
 
-const STATIC_DIR = path.join(__dirname, '../../static');
-const BACKUP_DIR = path.join(__dirname, '../../backup');
+const PROJECT_ROOT = path.join(__dirname, '../..');
+const STATIC_DIR = process.env.CHARACTER_ARCHIVE_STATIC_DIR || path.join(PROJECT_ROOT, 'static');
+const BACKUP_DIR = process.env.CHARACTER_ARCHIVE_BACKUP_DIR || path.join(PROJECT_ROOT, 'backup');
 
 /**
  * Ensure directory exists
@@ -1098,6 +1100,7 @@ export async function syncCards(config, progressCallback = null) {
     const estimatedTotalCards = Math.max(1, syncLimit * estimatedSegments);
 
     let newCards = 0;
+    let errors = 0;
     let processedCount = 0;
     let currentPage = startPage;
 
@@ -1114,17 +1117,17 @@ export async function syncCards(config, progressCallback = null) {
     scraperLogger.info(`Starting sync - pages ${startPage} to ${maxPage}, ${syncLimit} cards per page`);
 
     // Run all enabled scrapers sequentially
-    if (config.ctSync?.enabled) {
+    if (!config.skipSecondarySources && config.ctSync?.enabled) {
         scraperLogger.info('Running Character Tavern sync...');
         await syncCharacterTavern(config, progressCallback);
     }
 
-    if (config.risuAiSync?.enabled) {
+    if (!config.skipSecondarySources && config.risuAiSync?.enabled) {
         scraperLogger.info('Running RisuAI sync...');
         await syncRisuAi(config, progressCallback);
     }
 
-    if (config.wyvernSync?.enabled) {
+    if (!config.skipSecondarySources && config.wyvernSync?.enabled) {
         scraperLogger.info('Running Wyvern sync...');
         await syncWyvern(config, progressCallback);
     }
@@ -1147,7 +1150,13 @@ export async function syncCards(config, progressCallback = null) {
 
             try {
                 const url = `https://gateway.chub.ai/api/timeline/v1?page=${currentPage}&count=true`;
-                const response = await rateLimitedRequest(url, { headers: client.defaults.headers });
+                const response = await retryTransientRequest(
+                    () => rateLimitedRequest(url, { headers: client.defaults.headers }),
+                    { onRetry: ({ attempt, delay, error }) => scraperLogger.warn(
+                        `Retrying Chub timeline page ${currentPage} after ${error.message} ` +
+                        `(retry ${attempt}, ${delay}ms)`
+                    ) }
+                );
                 
                 const cards = response.data?.data?.nodes || [];
                 if (cards.length === 0) {
@@ -1212,6 +1221,7 @@ export async function syncCards(config, progressCallback = null) {
                 
             } catch (error) {
                 scraperLogger.error(`Failed on page ${currentPage}`, error);
+                errors++;
                 break;
             }
         }
@@ -1251,7 +1261,13 @@ export async function syncCards(config, progressCallback = null) {
                     const params = { ...baseParams, page };
                     if (tagValue) params.topics = tagValue;
 
-                    const response = await client.get('https://gateway.chub.ai/search', { params });
+                    const response = await retryTransientRequest(
+                        () => client.get('https://gateway.chub.ai/search', { params }),
+                        { onRetry: ({ attempt, delay, error }) => scraperLogger.warn(
+                            `Retrying Chub search page ${page} after ${error.message} ` +
+                            `(retry ${attempt}, ${delay}ms)`
+                        ) }
+                    );
                     const cards = response.data?.data?.nodes || [];
 
                     if (cards.length === 0) {
@@ -1297,6 +1313,7 @@ export async function syncCards(config, progressCallback = null) {
                     page++;
                 } catch (error) {
                     scraperLogger.error(`Failed on page ${page}${tagLabel ? ` (${tagLabel})` : ''}`, error);
+                    errors++;
                     break;
                 }
             }
@@ -1346,7 +1363,13 @@ export async function syncCards(config, progressCallback = null) {
                         exclude_mine: 'false'
                     };
 
-                    const response = await client.get('https://gateway.chub.ai/search', { params });
+                    const response = await retryTransientRequest(
+                        () => client.get('https://gateway.chub.ai/search', { params }),
+                        { onRetry: ({ attempt, delay, error }) => scraperLogger.warn(
+                            `Retrying creator '${username}' page ${page} after ${error.message} ` +
+                            `(retry ${attempt}, ${delay}ms)`
+                        ) }
+                    );
                     const cards = response.data?.data?.nodes || [];
 
                     if (cards.length === 0) {
@@ -1392,6 +1415,7 @@ export async function syncCards(config, progressCallback = null) {
                     page++;
                 } catch (error) {
                     scraperLogger.error(`Failed on page ${page} for creator '${username}'`, error);
+                    errors++;
                     break;
                 }
             }
@@ -1408,7 +1432,7 @@ export async function syncCards(config, progressCallback = null) {
     }
 
     scraperLogger.info(`Sync complete. Total new/updated cards: ${newCards}`);
-    return { success: true, newCards };
+    return { success: errors === 0 || newCards > 0, newCards, errors };
 }
 
 export default {

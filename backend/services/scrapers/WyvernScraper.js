@@ -10,6 +10,7 @@
 import axios from 'axios';
 import { BaseScraper } from './BaseScraper.js';
 import { inferTags } from '../../utils/keyword-tagger.js';
+import { createCardPng } from '../../utils/png-utils.js';
 
 const API_BASE = 'https://api.wyvern.chat';
 const APP_BASE = 'https://app.wyvern.chat';
@@ -23,6 +24,11 @@ export class WyvernScraper extends BaseScraper {
     }
 
     // ==================== API Client ====================
+
+    async writeCardFiles(dbId, files = {}) {
+        const png = files.png ? await createCardPng(files.png, files.json?.definition) : files.png;
+        return super.writeCardFiles(dbId, { ...files, png });
+    }
 
     createClient(bearerToken = null) {
         const headers = {
@@ -70,7 +76,7 @@ export class WyvernScraper extends BaseScraper {
             return response.data.results || [];
         } catch (error) {
             this.log.error(`Failed to fetch list page ${page}`, error.message);
-            return [];
+            throw new Error(`Wyvern list page ${page} failed: ${error.message}`, { cause: error });
         }
     }
 
