@@ -163,6 +163,42 @@ test('LanceDB applies documented Boolean query operators', async t => {
     await backend.close();
 });
 
+test('LanceDB keeps grouped phrase matches beyond the NOT universe hit window', async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-boolean-window-'));
+    t.after(async () => rm(directory, { recursive: true, force: true }));
+    const backend = new LanceSearchBackend({ uri: directory, tableName: 'cards_test', maxTotalHits: 100 });
+    t.after(() => backend.close());
+    await backend.rebuild([
+        ...Array.from({ length: 100 }, (_, index) => document({ id: `filler-${index}`, name: 'Unrelated' })),
+        ...['spaceship', 'space station', 'starship', 'star ship', 'space ship'].map((name, index) =>
+            document({ id: `match-${index}`, name, source: index % 2 ? 'ct' : 'chub' })),
+        document({ id: 'separated', name: 'space exploration station' }),
+        document({ id: 'gold', name: 'spaceship gold ship' }),
+        document({ id: 'goldship', name: 'starship goldship' }),
+        document({ id: 'azure', name: 'space station azure lane' }),
+        document({ id: 'not-excluded', name: 'space ship gold cargo ship' })
+    ]);
+
+    const positive = '("spaceship" OR "space station" OR "starship" OR "star ship" OR "space ship")';
+    const text = `${positive} AND NOT ("gold ship" OR "goldship" OR "azure lane")`;
+    const expected = ['match-0', 'match-1', 'match-2', 'match-3', 'match-4', 'not-excluded'];
+    assert.equal((await backend.searchLexical({ text: positive, sort: null })).total, 9);
+    const result = await backend.searchLexical({ text, sort: null });
+    assert.deepEqual(new Set(result.ids), new Set(expected));
+    assert.equal(result.total, expected.length);
+
+    const page = await backend.searchLexical({ text, page: 2, limit: 2, sort: null });
+    assert.deepEqual(page.ids, result.ids.slice(2, 4));
+    assert.equal(page.total, expected.length);
+
+    const filtered = await backend.searchLexical({ text, filter: 'source = "chub"', sort: null });
+    assert.deepEqual(new Set(filtered.ids), new Set(['match-0', 'match-2', 'match-4', 'not-excluded']));
+    assert.equal(filtered.total, 4);
+
+    const negated = await backend.searchLexical({ text: 'NOT ("gold ship" OR "goldship" OR "azure lane")', limit: 100 });
+    assert.equal(negated.total, 107, 'standalone NOT also uses every document in the universe');
+});
+
 test('LanceDB preserves grouped filter negation and IN-list semantics', async t => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'character-archive-lance-filter-compat-'));
     t.after(async () => rm(directory, { recursive: true, force: true }));

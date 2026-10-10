@@ -351,7 +351,9 @@ export class LanceSearchBackend {
                     allIds: async () => {
                         let allQuery = table.query().select(['id']);
                         if (appliedFilter) allQuery = allQuery.where(appliedFilter);
-                        return (await allQuery.limit(this.maxTotalHits).toArray()).map(hit => String(hit.id));
+                        // NOT needs the complete filtered universe: a hit window here
+                        // silently drops positive matches outside that arbitrary window.
+                        return (await allQuery.toArray()).map(hit => String(hit.id));
                     }
                 });
                 const hits = [...scoreMap.entries()]
